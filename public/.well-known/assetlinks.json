@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.crafteey_client.twa",
+        "sha256_cert_fingerprints": ["B2:C1:24:32:75:A2:0E:15:C7:EC:9A:5C:A5:97:F2:25:22:74:06:CF:A7:D8:E0:D1:B8:37:D9:9E:BE:F2:D0:66"]
+      }
+    }]
