@@ -89,7 +89,7 @@ export default function JobDetailPage() {
             This usually takes a few minutes. Haven't heard back yet?
           </p>
           {HOTLINE && (
-            
+            <a
               href={`tel:${HOTLINE}`}
               className="mt-3 inline-block rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white"
             >
@@ -108,7 +108,7 @@ export default function JobDetailPage() {
             <p className="mt-1 text-sm text-blue-700 dark:text-blue-500">{job.technicianName}</p>
           )}
           {job.technicianPhone && (
-            
+            <a
               href={`tel:${job.technicianPhone}`}
               className="mt-3 inline-block rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
             >
