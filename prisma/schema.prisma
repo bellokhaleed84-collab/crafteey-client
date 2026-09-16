@@ -1,0 +1,151 @@
+// prisma/schema.prisma
+//
+// SCOPE: this schema covers only the courier/delivery side of Crafteey —
+// Client, Courier, CourierRequest. The Job model (posted by crafteey-admin,
+// read by the technician portal, also touched by crafteey-client's booking
+// flow) stays on MongoDB/Mongoose, untouched, since migrating it would break
+// crafteey-admin and fixteq-technicians-portal. crafteey-client will run
+// both a Prisma/Postgres connection (for this schema) and its existing
+// Mongoose connection (for Job) side by side.
+
+generator client {
+  provider        = "prisma-client-js"
+  // Required for the `extensions = [postgis]` declaration below to
+  // actually generate a CREATE EXTENSION statement in migrations.
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+// ---------------------------------------------------------------------
+// Client — matches crafteey-client's real Client.ts model exactly.
+// ---------------------------------------------------------------------
+model Client {
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique
+  name        String
+  email       String
+  phone       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courierRequests CourierRequest[]
+
+  @@index([firebaseUid])
+}
+
+enum VehicleType {
+  MOTORCYCLE
+  BICYCLE
+  CAR
+  VAN_TRUCK
+}
+
+enum CourierAccountStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+  BLACKLISTED
+}
+
+model Courier {
+  id           String                @id @default(cuid())
+  firebaseUid  String                @unique
+  name         String
+  phone        String
+  vehicleType  VehicleType
+  vehiclePlate String                @default("")
+  idNumber     String                @default("")
+  idPhotoUrl   String                @default("")
+  status       CourierAccountStatus  @default(PENDING)
+  isOnline     Boolean               @default(false)
+
+  // Plain lat/lng for straightforward reads (e.g. showing a courier's
+  // dot on a map) — kept alongside the PostGIS geography column rather
+  // than instead of it, since Prisma can't read/write geography columns
+  // directly (see currentLocation below).
+  currentLat         Float?
+  currentLng         Float?
+  // PostGIS geography(Point, 4326) — Prisma has no native geography
+  // type, so this column exists in the database via a raw-SQL migration
+  // (see migration.sql) and is queried with $queryRaw for ST_DWithin /
+  // ST_Distance. Marked Unsupported so Prisma Client knows it exists but
+  // doesn't try to manage it directly.
+  currentLocation    Unsupported("geography(Point, 4326)")?
+  // H3 cell string at the configured resolution (see src/lib/h3.ts) —
+  // this is the CHEAP first-pass filter: "which couriers are roughly in
+  // this neighborhood" via an indexed string match / ring lookup, before
+  // PostGIS does the precise distance math on the shortlist.
+  currentH3Cell      String?
+  lastLocationUpdate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries CourierRequest[]
+
+  @@index([status])
+  @@index([currentH3Cell])
+}
+
+enum CourierRequestStatus {
+  PENDING
+  ACCEPTED
+  PICKED_UP
+  EN_ROUTE
+  DELIVERED
+  CANCELLED
+}
+
+model CourierRequest {
+  id String @id @default(cuid())
+
+  client   Client @relation(fields: [clientId], references: [id])
+  clientId String
+  // Denormalized copies for display without a join — matches the
+  // original Mongo shape (clientName/clientPhone stored directly on the
+  // request), kept for the same reason: the request should still show
+  // "who to call" even if a Client record is later edited or removed.
+  clientName  String
+  clientPhone String
+
+  pickup          String
+  pickupLat       Float?
+  pickupLng       Float?
+  pickupLocation  Unsupported("geography(Point, 4326)")?
+  pickupH3Cell    String?
+
+  dropoff         String
+  dropoffLat      Float?
+  dropoffLng      Float?
+  dropoffLocation Unsupported("geography(Point, 4326)")?
+
+  note String @default("")
+
+  status CourierRequestStatus @default(PENDING)
+
+  courier      Courier? @relation(fields: [courierId], references: [id])
+  courierId    String?
+  courierName  String?
+  courierPhone String?
+
+  // Live courier position for THIS delivery — same pattern as Courier's
+  // own currentLat/Lng/Location/H3Cell above.
+  courierLat      Float?
+  courierLng      Float?
+  courierLocation Unsupported("geography(Point, 4326)")?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([clientId])
+  @@index([courierId])
+  @@index([pickupH3Cell])
+}

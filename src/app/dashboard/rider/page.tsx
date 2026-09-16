@@ -34,6 +34,21 @@ const STATUS_LABEL: Record<string, string> = {
   [COURIER_STATUS.CANCELLED]: "Cancelled",
 };
 
+// Once a courier is assigned and actually en route, this is when live
+// tracking matters — before that (PENDING) there's no courier to track yet.
+// Typed as string[] explicitly — without this, TypeScript narrows the
+// array to the literal union of the specific COURIER_STATUS values, and
+// .includes() on a literal-typed array rejects the plain `string` type of
+// active.status, which is what caused the earlier type error.
+const TRACKABLE_STATUSES: string[] = [
+  COURIER_STATUS.ACCEPTED,
+  COURIER_STATUS.PICKED_UP,
+  COURIER_STATUS.EN_ROUTE,
+];
+
+// crafteey-rider is a separate deployment — this is a cross-origin call.
+const RIDER_APP_URL = process.env.NEXT_PUBLIC_RIDER_APP_URL ?? "";
+
 export default function RiderPage() {
   const { getIdToken } = useAuth();
   const [active, setActive] = useState<CourierRequest | null>(null);
@@ -43,7 +58,15 @@ export default function RiderPage() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Separate from `active.courierLocation` (Mongo's last-known value,
+  // fetched once) — this holds whatever crafteey-rider's live endpoint
+  // most recently returned, refreshed on its own timer during a delivery.
+  const [liveLocation, setLiveLocation] = useState<{ lat: number; lng: number; live: boolean } | null>(
+    null
+  );
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadActive = useCallback(async () => {
     try {
@@ -72,7 +95,10 @@ export default function RiderPage() {
         startPolling();
       }
     })();
-    return () => stopPolling();
+    return () => {
+      stopPolling();
+      stopLocationPolling();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -93,6 +119,54 @@ export default function RiderPage() {
       pollRef.current = null;
     }
   }
+
+  const fetchLiveLocation = useCallback(
+    async (requestId: string) => {
+      if (!RIDER_APP_URL) return;
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`${RIDER_APP_URL}/api/courier-requests/${requestId}/location`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (typeof data.lat === "number" && typeof data.lng === "number") {
+          setLiveLocation({ lat: data.lat, lng: data.lng, live: !!data.live });
+        }
+      } catch {
+        // A missed poll isn't worth surfacing — the map just keeps
+        // showing the last position it has until the next one succeeds.
+      }
+    },
+    [getIdToken]
+  );
+
+  function stopLocationPolling() {
+    if (locationPollRef.current) {
+      clearInterval(locationPollRef.current);
+      locationPollRef.current = null;
+    }
+  }
+
+  function startLocationPolling(requestId: string) {
+    stopLocationPolling();
+    fetchLiveLocation(requestId);
+    locationPollRef.current = setInterval(() => fetchLiveLocation(requestId), 6000);
+  }
+
+  // This is the actual fix: track the courier's live position for the
+  // whole trackable stretch of the delivery, not just while searching.
+  useEffect(() => {
+    if (active && TRACKABLE_STATUSES.includes(active.status)) {
+      startLocationPolling(active._id);
+    } else {
+      stopLocationPolling();
+      setLiveLocation(null);
+    }
+    return () => stopLocationPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?._id, active?.status]);
 
   async function handleConfirmRequest(data: {
     pickup: string;
@@ -123,9 +197,6 @@ export default function RiderPage() {
         }),
       });
       if (!res.ok) {
-        // Surface the server's real reason (e.g. "You already have an
-        // active request") instead of always falling back to a generic
-        // message that hides what actually went wrong.
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "Couldn't send that request. Try again.");
       }
@@ -145,12 +216,6 @@ export default function RiderPage() {
     stopPolling();
     setSearching(false);
     const cancellingId = active?._id;
-    // Clear immediately so the "Finding a courier" card disappears the
-    // instant the user cancels, instead of sitting there until the
-    // network round trip to /cancel and the follow-up loadActive() both
-    // resolve. If the cancel turns out to have failed server-side, we
-    // reconcile below by reloading the real state instead of leaving the
-    // UI claiming there's no active request when there still is one.
     setActive(null);
     if (!cancellingId) return;
     try {
@@ -170,16 +235,6 @@ export default function RiderPage() {
 
   if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
 
-  // Single source of truth for what the map shows, whether or not there's
-  // an active request. Previously this component returned two entirely
-  // separate JSX trees (one per branch below), each with its own <RouteMap>
-  // element. React treats those as different elements and unmounts the old
-  // one / mounts a new one whenever `active` flips from null to populated
-  // (which happens almost immediately after mount, once loadActive()
-  // resolves) — a real remount stacked right on top of React Strict Mode's
-  // dev-only double mount/unmount/mount cycle. Rendering exactly one
-  // <RouteMap> below and only changing its props avoids that extra
-  // teardown/recreate race entirely.
   const hasActiveRequest = !!active && active.status !== COURIER_STATUS.CANCELLED;
   const pickupCoords: LatLng | null =
     active?.pickupLat != null && active?.pickupLng != null
@@ -191,13 +246,22 @@ export default function RiderPage() {
       : null;
   const contactRevealed = hasActiveRequest && active!.status !== COURIER_STATUS.PENDING;
 
+  // Prefer the live-polled position; fall back to whatever Mongo had at
+  // last load (e.g. the instant right after acceptance, before the first
+  // live poll has resolved) so the map never has nothing to show.
+  const courierMapLocation: LatLng | null = hasActiveRequest
+    ? liveLocation
+      ? { lat: liveLocation.lat, lng: liveLocation.lng }
+      : active!.courierLocation ?? null
+    : null;
+
   return (
     <div className="space-y-4">
       <div className="relative">
         <RouteMap
           pickup={hasActiveRequest ? pickupCoords : null}
           dropoff={hasActiveRequest ? dropoffCoords : null}
-          courierLocation={hasActiveRequest ? active!.courierLocation ?? null : null}
+          courierLocation={courierMapLocation}
           className="h-[50vh] w-full rounded-2xl border border-slate-100 dark:border-slate-800"
         />
         {!hasActiveRequest && (
@@ -232,6 +296,15 @@ export default function RiderPage() {
                 >
                   Call {active!.courierPhone}
                 </a>
+              )}
+              {TRACKABLE_STATUSES.includes(active!.status) && (
+                <p className="mt-3 text-xs font-medium text-slate-400">
+                  {liveLocation
+                    ? liveLocation.live
+                      ? "🟢 Live location"
+                      : "Last known location — courier's connection may be spotty"
+                    : "Waiting for courier's location…"}
+                </p>
               )}
             </div>
           ) : (
