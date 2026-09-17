@@ -1,19 +1,42 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
-import { sendPasswordResetEmail } from "firebase/auth";
-import { auth } from "@/lib/firebase/clientApp";
-import { LogOut, Moon, Sun, KeyRound, Trash2, ChevronRight } from "lucide-react";
+import { User, SlidersHorizontal, CreditCard, LifeBuoy, LogOut, Trash2, ChevronRight } from "lucide-react";
+
+const NAV_ITEMS = [
+  {
+    href: "/dashboard/settings/profile",
+    icon: User,
+    title: "Profile",
+    subtitle: "Name, phone, email, password",
+  },
+  {
+    href: "/dashboard/settings/preferences",
+    icon: SlidersHorizontal,
+    title: "Preferences",
+    subtitle: "Appearance, notifications, language",
+  },
+  {
+    href: "/dashboard/settings/payments",
+    icon: CreditCard,
+    title: "Payments & bookings",
+    subtitle: "Payment methods, your jobs",
+  },
+  {
+    href: "/dashboard/settings/support",
+    icon: LifeBuoy,
+    title: "Support",
+    subtitle: "Help center, contact us, legal",
+  },
+];
 
 export default function SettingsPage() {
-  const { client, user, signOut, getIdToken } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { client, signOut, getIdToken } = useAuth();
   const router = useRouter();
 
-  const [resetStatus, setResetStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -21,17 +44,6 @@ export default function SettingsPage() {
   async function handleSignOut() {
     await signOut();
     router.replace("/login");
-  }
-
-  async function handleResetPassword() {
-    if (!user?.email) return;
-    setResetStatus("sending");
-    try {
-      await sendPasswordResetEmail(auth, user.email);
-      setResetStatus("sent");
-    } catch {
-      setResetStatus("error");
-    }
   }
 
   async function handleDeleteAccount() {
@@ -53,104 +65,44 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-lg font-bold text-brand dark:text-white">Settings</h1>
+      <div>
+        <h1 className="text-lg font-bold text-brand dark:text-white">Settings</h1>
+        {client?.name && (
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Signed in as {client.name}</p>
+        )}
+      </div>
 
-      {/* Account */}
-      <section className="space-y-2">
-        <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-          Account
-        </p>
-        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Name</p>
-          <p className="mb-3 font-semibold text-slate-900 dark:text-slate-100">{client?.name}</p>
-          {client?.phone && (
-            <>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Phone</p>
-              <p className="mb-3 font-semibold text-slate-900 dark:text-slate-100">{client.phone}</p>
-            </>
-          )}
-          {user?.email && (
-            <>
-              <p className="text-sm text-slate-500 dark:text-slate-400">Email</p>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">{user.email}</p>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* Security */}
-      <section className="space-y-2">
-        <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-          Security
-        </p>
-        <div className="divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-          <button
-            onClick={handleResetPassword}
-            disabled={resetStatus === "sending"}
-            className="flex w-full items-center justify-between px-6 py-4 text-left transition hover:bg-slate-50 disabled:opacity-60 dark:hover:bg-slate-800/60"
+      <div className="divide-y divide-slate-100 rounded-2xl border border-slate-100 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+        {NAV_ITEMS.map(({ href, icon: Icon, title, subtitle }) => (
+          <Link
+            key={href}
+            href={href}
+            className="flex items-center justify-between px-6 py-4 transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
           >
             <div className="flex items-center gap-3">
-              <KeyRound className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+              <Icon className="h-5 w-5 text-slate-500 dark:text-slate-400" />
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Change password</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {resetStatus === "sent"
-                    ? `Reset link sent to ${user?.email}`
-                    : resetStatus === "error"
-                    ? "Couldn't send the link. Try again."
-                    : resetStatus === "sending"
-                    ? "Sending…"
-                    : "We'll email you a reset link"}
-                </p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
               </div>
             </div>
             <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-          </button>
-        </div>
-      </section>
+          </Link>
+        ))}
+      </div>
 
-      {/* Appearance */}
       <section className="space-y-2">
         <p className="px-1 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-          Appearance
+          Account actions
         </p>
-        <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center gap-3">
-            {theme === "dark" ? (
-              <Moon className="h-5 w-5 text-slate-500 dark:text-slate-300" />
-            ) : (
-              <Sun className="h-5 w-5 text-slate-500" />
-            )}
-            <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Dark mode</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {theme === "dark" ? "Currently on" : "Currently off"}
-              </p>
-            </div>
-          </div>
+        <button
+          onClick={handleSignOut}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-red-950/30"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
 
-          <button
-            role="switch"
-            aria-checked={theme === "dark"}
-            onClick={toggleTheme}
-            className={`relative h-7 w-12 rounded-full transition ${
-              theme === "dark" ? "bg-brand-accent" : "bg-slate-300"
-            }`}
-          >
-            <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-transform ${
-                theme === "dark" ? "translate-x-6" : "translate-x-1"
-              }`}
-            />
-          </button>
-        </div>
-      </section>
-
-      {/* Danger zone */}
-      <section className="space-y-2">
-        <p className="px-1 text-xs font-semibold uppercase tracking-wide text-red-400 dark:text-red-500/80">
-          Danger zone
-        </p>
         <div className="rounded-2xl border border-red-100 bg-white shadow-sm dark:border-red-900/40 dark:bg-slate-900">
           <button
             onClick={() => setDeleteOpen(true)}
@@ -166,14 +118,6 @@ export default function SettingsPage() {
           </button>
         </div>
       </section>
-
-      <button
-        onClick={handleSignOut}
-        className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-red-950/30"
-      >
-        <LogOut className="h-4 w-4" />
-        Sign out
-      </button>
 
       {deleteOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6">

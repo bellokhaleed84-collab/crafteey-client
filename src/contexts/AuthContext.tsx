@@ -10,6 +10,9 @@ export interface ClientProfile {
   name: string;
   email: string;
   phone: string;
+  notifyEmail?: boolean;
+  notifyPush?: boolean;
+  language?: string;
 }
 
 interface AuthContextType {
