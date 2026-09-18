@@ -19,10 +19,22 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { pickup, dropoff, note } = body as {
+    const {
+      pickup,
+      dropoff,
+      note,
+      pickupContactName,
+      pickupContactPhone,
+      receiverName,
+      receiverPhone,
+    } = body as {
       pickup?: string;
       dropoff?: string;
       note?: string;
+      pickupContactName?: string;
+      pickupContactPhone?: string;
+      receiverName?: string;
+      receiverPhone?: string;
     };
 
     if (!pickup) {
@@ -30,6 +42,14 @@ export async function POST(req: NextRequest) {
     }
     if (!dropoff) {
       return NextResponse.json({ error: "dropoff is required" }, { status: 400 });
+    }
+    // Receiver details are required — this is who the rider actually
+    // calls at drop-off, and there's no other reliable way to reach them.
+    if (!receiverName) {
+      return NextResponse.json({ error: "receiverName is required" }, { status: 400 });
+    }
+    if (!receiverPhone) {
+      return NextResponse.json({ error: "receiverPhone is required" }, { status: 400 });
     }
 
     const existingActive = await CourierRequest.findOne({
@@ -47,6 +67,13 @@ export async function POST(req: NextRequest) {
       pickup,
       dropoff,
       note: note ?? "",
+      // Pickup contact is optional — defaults to the booking client's own
+      // details, since they're often the one physically at the pickup
+      // point. Receiver is always required and always explicit.
+      pickupContactName: pickupContactName || client.name,
+      pickupContactPhone: pickupContactPhone || client.phone,
+      receiverName,
+      receiverPhone,
       status: COURIER_STATUS.PENDING,
     });
 
