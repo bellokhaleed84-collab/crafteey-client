@@ -174,6 +174,12 @@ export default function RiderPage() {
     note: string;
     pickupPlace: PlaceResult;
     dropoffPlace: PlaceResult;
+    // New — collected by AddressSearchOverlay once it has the receiver
+    // and (optional) pickup-contact fields added to it.
+    receiverName: string;
+    receiverPhone: string;
+    pickupContactName?: string;
+    pickupContactPhone?: string;
   }) {
     setError(null);
     setSubmitting(true);
@@ -194,6 +200,10 @@ export default function RiderPage() {
           pickupLng: data.pickupPlace.lng,
           dropoffLat: data.dropoffPlace.lat,
           dropoffLng: data.dropoffPlace.lng,
+          receiverName: data.receiverName,
+          receiverPhone: data.receiverPhone,
+          pickupContactName: data.pickupContactName,
+          pickupContactPhone: data.pickupContactPhone,
         }),
       });
       if (!res.ok) {

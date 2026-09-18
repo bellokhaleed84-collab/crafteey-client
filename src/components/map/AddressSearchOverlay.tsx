@@ -8,6 +8,10 @@ interface AddressSearchOverlayProps {
   initialPickup?: string;
   initialDropoff?: string;
   error?: string | null;
+  // Optional so existing callers that don't pass it (if any) still
+  // compile — defaults to false, meaning the button just shows its
+  // normal idle animation.
+  submitting?: boolean;
   onClose: () => void;
   onConfirm: (data: {
     pickup: string;
@@ -15,6 +19,10 @@ interface AddressSearchOverlayProps {
     note: string;
     pickupPlace: PlaceResult;
     dropoffPlace: PlaceResult;
+    receiverName: string;
+    receiverPhone: string;
+    pickupContactName?: string;
+    pickupContactPhone?: string;
   }) => void;
 }
 
@@ -22,6 +30,7 @@ export default function AddressSearchOverlay({
   initialPickup = "",
   initialDropoff = "",
   error,
+  submitting = false,
   onClose,
   onConfirm,
 }: AddressSearchOverlayProps) {
@@ -31,7 +40,33 @@ export default function AddressSearchOverlay({
   const [dropoffPlace, setDropoffPlace] = useState<PlaceResult | null>(null);
   const [note, setNote] = useState("");
 
-  const canConfirm = pickupPlace && dropoffPlace;
+  // Receiver is who the courier actually calls at drop-off — required.
+  const [receiverName, setReceiverName] = useState("");
+  const [receiverPhone, setReceiverPhone] = useState("");
+
+  // Pickup contact is optional — only needed if it's not the person
+  // booking the request. Left blank, the backend defaults it to the
+  // booking client's own name/phone.
+  const [pickupContactName, setPickupContactName] = useState("");
+  const [pickupContactPhone, setPickupContactPhone] = useState("");
+
+  const canConfirm =
+    !!pickupPlace && !!dropoffPlace && receiverName.trim().length > 0 && receiverPhone.trim().length > 0;
+
+  function handleConfirm() {
+    if (!canConfirm || submitting) return;
+    onConfirm({
+      pickup,
+      dropoff,
+      note,
+      pickupPlace: pickupPlace!,
+      dropoffPlace: dropoffPlace!,
+      receiverName: receiverName.trim(),
+      receiverPhone: receiverPhone.trim(),
+      pickupContactName: pickupContactName.trim() || undefined,
+      pickupContactPhone: pickupContactPhone.trim() || undefined,
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col bg-white dark:bg-slate-950">
@@ -71,23 +106,116 @@ export default function AddressSearchOverlay({
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
+
+        {/* Receiver — who the courier calls at drop-off. Required. */}
+        <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Receiver details
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Receiver name
+              </label>
+              <input
+                type="text"
+                value={receiverName}
+                onChange={(e) => setReceiverName(e.target.value)}
+                placeholder="Who's receiving this?"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Receiver phone
+              </label>
+              <input
+                type="tel"
+                value={receiverPhone}
+                onChange={(e) => setReceiverPhone(e.target.value)}
+                placeholder="Phone number the courier can call"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Pickup contact — optional, only needed if it isn't the booking client themself. */}
+        <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
+          <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            Pickup contact <span className="font-normal normal-case text-slate-400">(optional — defaults to you)</span>
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Contact name
+              </label>
+              <input
+                type="text"
+                value={pickupContactName}
+                onChange={(e) => setPickupContactName(e.target.value)}
+                placeholder="Leave blank to use your name"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                Contact phone
+              </label>
+              <input
+                type="tel"
+                value={pickupContactPhone}
+                onChange={(e) => setPickupContactPhone(e.target.value)}
+                placeholder="Leave blank to use your phone"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="border-t border-slate-100 p-4 dark:border-slate-800">
-        {error && (
-          <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>
-        )}
+        {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p>}
         <button
-          disabled={!canConfirm}
-          onClick={() =>
-            canConfirm &&
-            onConfirm({ pickup, dropoff, note, pickupPlace: pickupPlace!, dropoffPlace: dropoffPlace! })
-          }
-          className="w-full rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-50"
+          disabled={!canConfirm || submitting}
+          onClick={handleConfirm}
+          style={{
+            animation: canConfirm && !submitting ? "confirm-glow 2s ease-in-out infinite" : "none",
+          }}
+          className="relative flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 py-3.5 text-sm font-bold text-white shadow-lg shadow-brand/20 transition-all duration-200 hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:brightness-100"
         >
-          Confirm request
+          {submitting ? (
+            <>
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                />
+              </svg>
+              Sending request…
+            </>
+          ) : (
+            "Confirm request"
+          )}
         </button>
       </div>
+
+      {/* Subtle breathing glow on the confirm button once the form is
+          valid — draws the eye without being distracting. Scoped to this
+          component via styled-jsx so it doesn't leak globally. */}
+      <style jsx global>{`
+        @keyframes confirm-glow {
+          0%,
+          100% {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 0 0 rgba(99, 102, 241, 0.4);
+          }
+          50% {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 0 6px rgba(99, 102, 241, 0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
