@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Bike, History, Settings } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Bike, History, Settings } from "lucide-react";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/rider", label: "Rider", icon: Bike },
+  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/dashboard/hub", label: "Hub", icon: ShoppingBag },
+  { href: "/dashboard/rider", label: "Rides", icon: Bike },
   { href: "/dashboard/history", label: "History", icon: History },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

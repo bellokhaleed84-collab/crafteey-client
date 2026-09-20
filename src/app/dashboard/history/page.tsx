@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bike, Wrench } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { JOB_STATUS, COURIER_STATUS } from "@/lib/constants";
 
@@ -48,10 +49,27 @@ function colorFor(status: string) {
   return STATUS_COLOR.active;
 }
 
+// Matches the mockup's "Apr 12, 2025 • 1:24 PM" style.
+function formatWhen(iso: string) {
+  const d = new Date(iso);
+  const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return `${date} • ${time}`;
+}
+
+type FilterKey = "all" | "courier" | "job";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "courier", label: "Rides" },
+  { key: "job", label: "Technicians" },
+];
+
 export default function HistoryPage() {
   const { getIdToken } = useAuth();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterKey>("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -97,34 +115,80 @@ export default function HistoryPage() {
     load();
   }, [load]);
 
-  if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
-
-  if (items.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
-        <p className="text-sm text-slate-500 dark:text-slate-400">No jobs or deliveries yet.</p>
-      </div>
-    );
-  }
+  const visibleItems = useMemo(
+    () => (filter === "all" ? items : items.filter((i) => i.type === filter)),
+    [items, filter]
+  );
 
   return (
-    <div className="space-y-3">
-      {items.map((item) => (
-        <div key={`${item.type}-${item._id}`} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-                {item.type === "job" ? "Job" : "Delivery"}
-              </span>
-              <p className="font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
-              <p className="mt-0.5 text-sm text-slate-500 line-clamp-1 dark:text-slate-400">{item.subtitle}</p>
-            </div>
-            <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colorFor(item.status)}`}>
-              {labelFor(item)}
-            </span>
-          </div>
+    <div className="space-y-4">
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {FILTERS.map((f) => {
+          const active = filter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold transition ${
+                active
+                  ? "bg-brand text-white dark:bg-brand-accent"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
+      ) : visibleItems.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center dark:border-slate-700 dark:bg-slate-900">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            {filter === "all" ? "No jobs or deliveries yet." : "Nothing here yet."}
+          </p>
         </div>
-      ))}
+      ) : (
+        <div className="space-y-3">
+          {visibleItems.map((item) => {
+            const Icon = item.type === "job" ? Wrench : Bike;
+            return (
+              <div
+                key={`${item.type}-${item._id}`}
+                className="flex gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                        {item.type === "job" ? "Technician" : "Delivery"}
+                      </span>
+                      <p className="font-semibold text-slate-900 dark:text-slate-100">{item.title}</p>
+                      <p className="mt-0.5 text-sm text-slate-500 line-clamp-1 dark:text-slate-400">
+                        {item.subtitle}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${colorFor(
+                        item.status
+                      )}`}
+                    >
+                      {labelFor(item)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                    {formatWhen(item.createdAt)}
+                  </p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
