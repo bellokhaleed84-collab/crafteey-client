@@ -1,7 +1,8 @@
+
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Search } from "lucide-react";
+import { Search, Sparkles, PhoneCall, MapPin, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { COURIER_STATUS } from "@/lib/constants";
 import { type PlaceResult } from "@/components/map/MapboxAddressInput";
@@ -286,6 +287,56 @@ export default function RiderPage() {
           </button>
         )}
       </div>
+
+      {/* Fills the space below the map when there's nothing active —
+          promo banner + delivery tips/safety, so the page never sits on
+          a chunk of empty white space between bookings. */}
+      {!hasActiveRequest && (
+        <div className="space-y-4">
+          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-accent to-blue-600 p-5 text-white shadow-lg">
+            <Sparkles className="absolute -right-4 -top-4 h-24 w-24 text-white/15" />
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">
+              Crafteey Delivery
+            </p>
+            <p className="mt-1 text-lg font-bold leading-snug">
+              Fast, reliable deliveries across Lagos
+            </p>
+            <p className="mt-1 text-sm text-white/85">
+              Any online courier can accept your request in seconds — no
+              waiting around for a single driver to show up.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <p className="mb-3 text-sm font-bold text-slate-900 dark:text-slate-100">
+              Delivery tips & safety
+            </p>
+            <ul className="space-y-3">
+              <li className="flex items-start gap-3">
+                <PhoneCall className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Double-check the receiver's phone number — your courier
+                  will call to confirm the drop-off.
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Pick a pickup spot that's easy to find and reachable by
+                  your chosen vehicle type.
+                </span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Eye className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
+                <span className="text-sm text-slate-600 dark:text-slate-400">
+                  Track your courier live once they accept, and only hand
+                  off packages to the courier shown in the app.
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      )}
 
       {hasActiveRequest && (
         <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
