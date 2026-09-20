@@ -3,3 +3,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Sensible fallback so any page/element that forgets to set its own
+   background or text color still looks intentional rather than
+   showing the browser default. Pages that already set their own
+   bg-slate-50/bg-white etc. on wrapping divs are unaffected — this
+   only fills in where nothing else applies. */
+@layer base {
+  body {
+    @apply bg-white text-brand antialiased;
+  }
+}
