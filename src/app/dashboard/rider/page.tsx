@@ -180,6 +180,7 @@ export default function RiderPage() {
     receiverPhone: string;
     pickupContactName?: string;
     pickupContactPhone?: string;
+    vehicleType: "bicycle" | "motorcycle" | "cargo";
   }) {
     setError(null);
     setSubmitting(true);
@@ -204,6 +205,7 @@ export default function RiderPage() {
           receiverPhone: data.receiverPhone,
           pickupContactName: data.pickupContactName,
           pickupContactPhone: data.pickupContactPhone,
+          vehicleType: data.vehicleType,
         }),
       });
       if (!res.ok) {

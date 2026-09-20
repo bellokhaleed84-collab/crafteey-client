@@ -1,16 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bike, Truck } from "lucide-react";
 import MapboxAddressInput, { type PlaceResult } from "@/components/map/MapboxAddressInput";
+
+export type VehicleType = "bicycle" | "motorcycle" | "cargo";
 
 interface AddressSearchOverlayProps {
   initialPickup?: string;
   initialDropoff?: string;
   error?: string | null;
-  // Optional so existing callers that don't pass it (if any) still
-  // compile — defaults to false, meaning the button just shows its
-  // normal idle animation.
   submitting?: boolean;
   onClose: () => void;
   onConfirm: (data: {
@@ -23,8 +22,31 @@ interface AddressSearchOverlayProps {
     receiverPhone: string;
     pickupContactName?: string;
     pickupContactPhone?: string;
+    vehicleType: VehicleType;
   }) => void;
 }
+
+// Simple inline motorcycle icon — lucide doesn't ship one, so this is a
+// minimal custom SVG rather than reusing the bicycle icon for both.
+function MotorcycleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
+      <circle cx="5" cy="17" r="2.5" />
+      <circle cx="18" cy="17" r="2.5" />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M5 17h4l2-5h4l3 5h2M11 12l2-3h3M8 17l2-5"
+      />
+    </svg>
+  );
+}
+
+const VEHICLE_OPTIONS: { key: VehicleType; label: string; icon: (p: { className?: string }) => JSX.Element }[] = [
+  { key: "bicycle", label: "Bicycle", icon: (p) => <Bike {...p} /> },
+  { key: "motorcycle", label: "Motorcycle", icon: (p) => <MotorcycleIcon {...p} /> },
+  { key: "cargo", label: "Cargo", icon: (p) => <Truck {...p} /> },
+];
 
 export default function AddressSearchOverlay({
   initialPickup = "",
@@ -39,19 +61,20 @@ export default function AddressSearchOverlay({
   const [pickupPlace, setPickupPlace] = useState<PlaceResult | null>(null);
   const [dropoffPlace, setDropoffPlace] = useState<PlaceResult | null>(null);
   const [note, setNote] = useState("");
+  const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
 
-  // Receiver is who the courier actually calls at drop-off — required.
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
 
-  // Pickup contact is optional — only needed if it's not the person
-  // booking the request. Left blank, the backend defaults it to the
-  // booking client's own name/phone.
   const [pickupContactName, setPickupContactName] = useState("");
   const [pickupContactPhone, setPickupContactPhone] = useState("");
 
   const canConfirm =
-    !!pickupPlace && !!dropoffPlace && receiverName.trim().length > 0 && receiverPhone.trim().length > 0;
+    !!pickupPlace &&
+    !!dropoffPlace &&
+    !!vehicleType &&
+    receiverName.trim().length > 0 &&
+    receiverPhone.trim().length > 0;
 
   function handleConfirm() {
     if (!canConfirm || submitting) return;
@@ -65,6 +88,7 @@ export default function AddressSearchOverlay({
       receiverPhone: receiverPhone.trim(),
       pickupContactName: pickupContactName.trim() || undefined,
       pickupContactPhone: pickupContactPhone.trim() || undefined,
+      vehicleType: vehicleType!,
     });
   }
 
@@ -81,6 +105,34 @@ export default function AddressSearchOverlay({
       </div>
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
+        {/* Vehicle type */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            Vehicle type
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {VEHICLE_OPTIONS.map((v) => {
+              const Icon = v.icon;
+              const selected = vehicleType === v.key;
+              return (
+                <button
+                  key={v.key}
+                  type="button"
+                  onClick={() => setVehicleType(v.key)}
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition ${
+                    selected
+                      ? "border-brand-accent bg-brand-accent/10 text-brand-accent"
+                      : "border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  {v.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <MapboxAddressInput
           label="Pickup address"
           placeholder="Search for a pickup location"
@@ -107,7 +159,6 @@ export default function AddressSearchOverlay({
           />
         </div>
 
-        {/* Receiver — who the courier calls at drop-off. Required. */}
         <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
           <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Receiver details
@@ -140,7 +191,6 @@ export default function AddressSearchOverlay({
           </div>
         </div>
 
-        {/* Pickup contact — optional, only needed if it isn't the booking client themself. */}
         <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
           <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             Pickup contact <span className="font-normal normal-case text-slate-400">(optional — defaults to you)</span>
@@ -188,11 +238,7 @@ export default function AddressSearchOverlay({
             <>
               <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
               Sending request…
             </>
@@ -202,9 +248,6 @@ export default function AddressSearchOverlay({
         </button>
       </div>
 
-      {/* Subtle breathing glow on the confirm button once the form is
-          valid — draws the eye without being distracting. Scoped to this
-          component via styled-jsx so it doesn't leak globally. */}
       <style jsx global>{`
         @keyframes confirm-glow {
           0%,

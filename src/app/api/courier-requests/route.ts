@@ -5,6 +5,9 @@ import CourierRequest from "@/models/CourierRequest";
 import Client from "@/models/Client";
 import { COURIER_STATUS } from "@/lib/constants";
 
+const VALID_VEHICLE_TYPES = ["bicycle", "motorcycle", "cargo"] as const;
+type VehicleType = (typeof VALID_VEHICLE_TYPES)[number];
+
 export async function POST(req: NextRequest) {
   try {
     const { uid } = await verifyToken(req);
@@ -27,6 +30,7 @@ export async function POST(req: NextRequest) {
       pickupContactPhone,
       receiverName,
       receiverPhone,
+      vehicleType,
     } = body as {
       pickup?: string;
       dropoff?: string;
@@ -35,6 +39,7 @@ export async function POST(req: NextRequest) {
       pickupContactPhone?: string;
       receiverName?: string;
       receiverPhone?: string;
+      vehicleType?: string;
     };
 
     if (!pickup) {
@@ -43,13 +48,17 @@ export async function POST(req: NextRequest) {
     if (!dropoff) {
       return NextResponse.json({ error: "dropoff is required" }, { status: 400 });
     }
-    // Receiver details are required — this is who the rider actually
-    // calls at drop-off, and there's no other reliable way to reach them.
     if (!receiverName) {
       return NextResponse.json({ error: "receiverName is required" }, { status: 400 });
     }
     if (!receiverPhone) {
       return NextResponse.json({ error: "receiverPhone is required" }, { status: 400 });
+    }
+    if (!vehicleType || !VALID_VEHICLE_TYPES.includes(vehicleType as VehicleType)) {
+      return NextResponse.json(
+        { error: "vehicleType must be one of: bicycle, motorcycle, cargo" },
+        { status: 400 }
+      );
     }
 
     const existingActive = await CourierRequest.findOne({
@@ -67,13 +76,11 @@ export async function POST(req: NextRequest) {
       pickup,
       dropoff,
       note: note ?? "",
-      // Pickup contact is optional — defaults to the booking client's own
-      // details, since they're often the one physically at the pickup
-      // point. Receiver is always required and always explicit.
       pickupContactName: pickupContactName || client.name,
       pickupContactPhone: pickupContactPhone || client.phone,
       receiverName,
       receiverPhone,
+      vehicleType,
       status: COURIER_STATUS.PENDING,
     });
 
