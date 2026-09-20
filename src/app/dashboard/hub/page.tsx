@@ -2,9 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search, Heart, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, Search, Heart, SlidersHorizontal, UtensilsCrossed, ShoppingBasket, CupSoda, Store } from "lucide-react";
 
-const CATEGORIES = ["All", "Local", "Fast Food", "Drinks", "Desserts"];
+const QUICK_CATEGORIES = [
+  { label: "Food", icon: UtensilsCrossed, tone: "bg-sunshine/20 text-sunshine-dark" },
+  { label: "Groceries", icon: ShoppingBasket, tone: "bg-emerald-100 text-emerald-700" },
+  { label: "Drinks", icon: CupSoda, tone: "bg-brand-accent/10 text-brand-accent" },
+  { label: "Marketplace", icon: Store, tone: "bg-brand/10 text-brand" },
+];
+
+const FILTER_TABS = ["All", "Local", "Fast Food", "Drinks", "Desserts"];
 
 const RESTAURANTS = [
   { name: "Buka Zone", tag: "Nigerian • Fast Food", rating: 4.6, reviews: "1.2k+", eta: "30-40 mins", emoji: "🍛" },
@@ -12,25 +19,31 @@ const RESTAURANTS = [
   { name: "Suya Spot", tag: "Nigerian • Local", rating: 4.7, reviews: "760+", eta: "20-30 mins", emoji: "🍢" },
 ];
 
+const MARKETPLACE_PICKS = [
+  { name: "6-Pack Bottled Water", price: "₦1,200", emoji: "💧" },
+  { name: "Fresh Tomato Basket", price: "₦3,500", emoji: "🍅" },
+  { name: "Phone Charger Cable", price: "₦2,000", emoji: "🔌" },
+];
+
 export default function HubPage() {
   const [activeCategory, setActiveCategory] = useState("All");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/dashboard" aria-label="Back" className="text-brand">
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-lg font-bold text-brand">Food</h1>
+        <h1 className="text-lg font-bold text-brand">Crafteey Hub</h1>
       </div>
-      <p className="-mt-3 text-xs text-steel">📍 Lagos, Nigeria</p>
+      <p className="-mt-4 text-xs text-steel">📍 Lagos, Nigeria</p>
 
       <div className="flex items-center gap-2">
         <div className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-card">
           <Search className="h-4 w-4 text-steel" />
           <input
             type="text"
-            placeholder="Search for restaurants or dishes…"
+            placeholder="Search for restaurants, groceries, products…"
             className="w-full bg-transparent text-sm text-brand outline-none placeholder:text-steel"
           />
         </div>
@@ -43,13 +56,28 @@ export default function HubPage() {
         </button>
       </div>
 
+      {/* Quick category shortcuts — visual only for now, all still lead to the same food listing below */}
+      <div className="grid grid-cols-4 gap-2.5">
+        {QUICK_CATEGORIES.map((c) => {
+          const Icon = c.icon;
+          return (
+            <div key={c.label} className="flex flex-col items-center gap-1.5 rounded-2xl bg-white p-3 shadow-card">
+              <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${c.tone}`}>
+                <Icon className="h-4 w-4" />
+              </span>
+              <p className="text-center text-[11px] font-semibold leading-tight text-brand">{c.label}</p>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="rounded-2xl bg-sunshine p-5">
         <p className="text-base font-extrabold text-brand">Good Food, Great Mood</p>
         <p className="mt-1 text-xs font-medium text-brand/70">Fresh meals, fast delivery</p>
       </div>
 
       <div className="flex gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none]">
-        {CATEGORIES.map((cat) => (
+        {FILTER_TABS.map((cat) => (
           <button
             key={cat}
             type="button"
@@ -89,11 +117,30 @@ export default function HubPage() {
         </div>
       </div>
 
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-bold text-brand">Marketplace picks</p>
+          <span className="text-xs font-semibold text-brand-accent">See all</span>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {MARKETPLACE_PICKS.map((p) => (
+            <div key={p.name} className="rounded-2xl bg-white p-3 shadow-card">
+              <div className="flex h-14 w-full items-center justify-center rounded-xl bg-surface-muted text-2xl">
+                {p.emoji}
+              </div>
+              <p className="mt-2 line-clamp-2 text-[11px] font-semibold leading-tight text-brand">{p.name}</p>
+              <p className="mt-1 text-xs font-bold text-brand-accent">{p.price}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Honest about status — this is a visual preview only, nothing here
           is wired to a real backend, cart, or checkout yet. */}
       <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
         <p className="text-sm text-steel">
-          Crafteey Hub is coming soon — this is a preview of what food &amp; marketplace ordering will look like.
+          Crafteey Hub is coming soon — this is a preview of what food, groceries &amp; marketplace ordering will
+          look like.
         </p>
       </div>
     </div>
