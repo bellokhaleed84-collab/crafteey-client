@@ -11,7 +11,6 @@ import {
   PackageCheck,
   Phone,
   PhoneCall,
-  Search,
   Truck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -470,8 +469,8 @@ export default function RiderPage() {
         /* ─────────── Delivery successful ─────────── */
         <div className="space-y-6 pt-6">
           <div className="flex flex-col items-center text-center">
-            <span className="flex h-24 w-24 items-center justify-center rounded-full bg-sunshine/30">
-              <PackageCheck className="h-12 w-12 text-sunshine-dark" />
+            <span className="flex h-24 w-24 items-center justify-center rounded-full bg-sunshine">
+              <PackageCheck className="h-12 w-12 text-brand" />
             </span>
             <h1 className="mt-5 text-2xl font-extrabold text-brand dark:text-white">
               Delivery successful!
@@ -578,16 +577,8 @@ export default function RiderPage() {
               Move your world with Crafteey Rides
             </h1>
             <p className="mt-1 text-sm font-medium text-brand/70">
-              Fast, safe and affordable deliveries across Lagos.
+              Fast, safe and affordable deliveries only.
             </p>
-            <button
-              type="button"
-              onClick={() => openBooking(null)}
-              className="mt-4 flex w-full items-center gap-2 rounded-2xl bg-white px-4 py-3 text-left text-sm font-semibold text-steel shadow-card transition hover:shadow-card-lg"
-            >
-              <Search className="h-4 w-4 text-brand-accent" />
-              Where to?
-            </button>
           </div>
 
           <div>
@@ -603,7 +594,7 @@ export default function RiderPage() {
                     onClick={() => openBooking(v.key)}
                     className="flex w-full items-center gap-4 rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-card transition hover:shadow-card-lg active:scale-[0.99] dark:border-slate-800 dark:bg-slate-900"
                   >
-                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-sunshine/25 text-sunshine-dark">
+                    <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-sunshine text-brand">
                       <Icon className="h-7 w-7" />
                     </span>
                     <span className="min-w-0 flex-1">

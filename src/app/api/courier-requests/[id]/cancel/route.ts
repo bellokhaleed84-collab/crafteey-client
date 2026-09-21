@@ -12,24 +12,38 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const { id } = params;
 
-    // Ownership check baked into the filter: only cancel a request that
-    // belongs to the calling client AND isn't already delivered/cancelled.
-    // If either check fails, matchedCount is 0 and we return 404 instead
-    // of silently "succeeding" on someone else's or an already-closed
-    // request.
+    // A client can only cancel while the request is still PENDING (i.e.
+    // "finding a courier"). The status is part of the update filter, so
+    // if a courier accepts at the same instant, this update simply won't
+    // match — there's no window where an accepted delivery gets cancelled.
+    // Ownership (clientUid) is enforced in the same filter.
     const result = await CourierRequest.updateOne(
       {
         _id: id,
         clientUid: uid,
-        status: { $nin: [COURIER_STATUS.DELIVERED, COURIER_STATUS.CANCELLED] },
+        status: COURIER_STATUS.PENDING,
       },
       { $set: { status: COURIER_STATUS.CANCELLED } }
     );
 
     if (result.matchedCount === 0) {
+      // Work out *why* it didn't match, so the response is accurate
+      // instead of a generic "not found".
+      const existing = await CourierRequest.findOne({ _id: id, clientUid: uid })
+        .select("status")
+        .lean<{ status: string }>();
+
+      if (!existing) {
+        return NextResponse.json({ error: "Request not found" }, { status: 404 });
+      }
+
+      if (existing.status === COURIER_STATUS.CANCELLED) {
+        return NextResponse.json({ error: "Request is already cancelled" }, { status: 409 });
+      }
+
       return NextResponse.json(
-        { error: "Request not found or already closed" },
-        { status: 404 }
+        { error: "A courier has already accepted this delivery, so it can no longer be cancelled." },
+        { status: 409 }
       );
     }
 
