@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, MapPin, Search, UtensilsCrossed, Car, Wrench } from "lucide-react";
+import { Bell, MapPin, Search, UtensilsCrossed, Car, Wrench, Clock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const SERVICES = [
@@ -28,6 +28,14 @@ const SERVICES = [
     href: "/dashboard/technicians",
     icon: Wrench,
     tone: "bg-brand/10 text-brand",
+  },
+  {
+    key: "history",
+    label: "History",
+    sub: "Past orders & bookings",
+    href: "/dashboard/history",
+    icon: Clock,
+    tone: "bg-brand-accent/10 text-brand-accent",
   },
 ];
 
@@ -95,23 +103,23 @@ export default function DashboardHomePage() {
         <p className="mt-1 text-xs text-white/80">Whatever you need, Crafteey delivers.</p>
       </div>
 
-      {/* Service cards — three in a row */}
+      {/* Service cards — four in a row */}
       <div>
         <p className="mb-3 text-sm font-bold text-brand">Explore Crafteey</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-2">
           {SERVICES.map((s) => {
             const Icon = s.icon;
             return (
               <Link
                 key={s.key}
                 href={s.href}
-                className="rounded-2xl bg-white p-3.5 shadow-card transition hover:shadow-card-lg"
+                className="min-w-0 rounded-2xl bg-white p-2.5 shadow-card transition hover:shadow-card-lg"
               >
                 <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${s.tone}`}>
                   <Icon className="h-4 w-4" />
                 </span>
-                <p className="mt-2.5 text-xs font-bold leading-tight text-brand">{s.label}</p>
-                <p className="mt-0.5 text-[11px] leading-tight text-steel">{s.sub}</p>
+                <p className="mt-2 break-words text-[11px] font-bold leading-tight text-brand">{s.label}</p>
+                <p className="mt-0.5 break-words text-[10px] leading-tight text-steel">{s.sub}</p>
               </Link>
             );
           })}

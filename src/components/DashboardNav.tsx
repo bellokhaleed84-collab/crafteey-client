@@ -2,14 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ShoppingBag, Bike, History, Settings } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, Bike, Wrench, LayoutGrid } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
   { href: "/dashboard/hub", label: "Hub", icon: ShoppingBag },
   { href: "/dashboard/rider", label: "Rides", icon: Bike },
-  { href: "/dashboard/history", label: "History", icon: History },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  { href: "/dashboard/technicians", label: "Technicians", icon: Wrench },
+  { href: "/dashboard/settings", label: "More", icon: LayoutGrid },
 ];
 
 export default function DashboardNav() {
