@@ -2,25 +2,30 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search, ShoppingCart } from "lucide-react";
-import { useCart } from "@/contexts/CartContext";
+import { ArrowLeft, Search } from "lucide-react";
 import ProductCard from "@/components/hub/ProductCard";
-import { HUB_CATEGORY_LABELS, type HubCategory } from "@/lib/hub/config";
+import { HUB_CATEGORIES, HUB_CATEGORY_LABELS, type HubCategory } from "@/lib/hub/config";
+import { HUB_CATEGORY_META } from "@/lib/hub/categoryMeta";
+import { formatVendorMeta } from "@/lib/hub/format";
 import type { HubProduct, HubVendorDTO } from "@/lib/hub/types";
+
+const pillBase = "shrink-0 rounded-xl px-3.5 py-2 text-xs font-semibold";
+const pillOn = "bg-sunshine text-brand";
+const pillOff = "bg-white text-steel shadow-card";
 
 /** One shared screen for Food, Groceries, Drinks and Marketplace. It only ever requests its own category. */
 export default function CategoryView({ category }: { category: HubCategory }) {
-  const { count } = useCart();
+  const meta = HUB_CATEGORY_META[category];
+  const label = HUB_CATEGORY_LABELS[category];
+
   const [vendors, setVendors] = useState<HubVendorDTO[]>([]);
   const [vendorId, setVendorId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [products, setProducts] = useState<HubProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const label = HUB_CATEGORY_LABELS[category];
+  const [ready, setReady] = useState(false);
 
   // Preselect a vendor when arriving from the Hub (?vendor=ID)
   useEffect(() => {
@@ -64,83 +69,120 @@ export default function CategoryView({ category }: { category: HubCategory }) {
     };
   }, [category, vendorId, debounced, ready]);
 
+  const selectedVendor = vendors.find((v) => v._id === vendorId);
+  const isGrid = meta.layout === "grid";
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/hub"
-            aria-label="Back to Hub"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">{label}</h1>
-        </div>
-        <Link
-          href="/dashboard/hub/cart"
-          aria-label="Cart"
-          className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-        >
-          <ShoppingCart className="h-4 w-4" />
-          {count > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">
-              {count}
-            </span>
-          )}
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Link href="/dashboard/hub" aria-label="Back to Hub" className="text-brand">
+          <ArrowLeft className="h-5 w-5" />
         </Link>
+        <h1 className="text-lg font-bold text-brand">{label}</h1>
       </div>
 
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      {/* switch between categories */}
+      <div className="-mt-2 flex gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none]">
+        {HUB_CATEGORIES.map((c) => (
+          <Link
+            key={c}
+            href={`/dashboard/hub/${c}`}
+            replace
+            className={`${pillBase} ${c === category ? pillOn : pillOff}`}
+          >
+            {HUB_CATEGORY_META[c].emoji} {HUB_CATEGORY_LABELS[c]}
+          </Link>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-card">
+        <Search className="h-4 w-4 text-steel" />
         <input
+          type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search ${label.toLowerCase()}`}
-          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-brand dark:border-slate-800 dark:bg-slate-900 dark:text-white"
+          placeholder={meta.searchHint}
+          className="w-full bg-transparent text-sm text-brand outline-none placeholder:text-steel"
         />
       </div>
 
+      <div className="flex items-center justify-between rounded-2xl bg-sunshine p-5">
+        <div>
+          <p className="text-base font-extrabold text-brand">{meta.title}</p>
+          <p className="mt-1 text-xs font-medium text-brand/70">{meta.subtitle}</p>
+        </div>
+        <span className="text-4xl" aria-hidden>
+          {meta.emoji}
+        </span>
+      </div>
+
       {vendors.length > 1 && (
-        <div className="-mx-6 flex gap-2 overflow-x-auto px-6 pb-1">
-          {[{ _id: "", name: "All" } as Pick<HubVendorDTO, "_id" | "name">, ...vendors].map((v) => {
-            const active = (vendorId ?? "") === v._id;
-            return (
-              <button
-                key={v._id || "all"}
-                onClick={() => setVendorId(v._id || null)}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${
-                  active
-                    ? "border-brand bg-brand text-white"
-                    : "border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
-                }`}
-              >
-                {v.name}
-              </button>
-            );
-          })}
+        <div className="flex gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none]">
+          <button type="button" onClick={() => setVendorId(null)} className={`${pillBase} ${!vendorId ? pillOn : pillOff}`}>
+            All
+          </button>
+          {vendors.map((v) => (
+            <button
+              key={v._id}
+              type="button"
+              onClick={() => setVendorId(v._id)}
+              className={`${pillBase} ${vendorId === v._id ? pillOn : pillOff}`}
+            >
+              {v.name}
+            </button>
+          ))}
         </div>
       )}
 
-      {loading ? (
-        <div className="space-y-3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[104px] animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-800" />
-          ))}
-        </div>
-      ) : error ? (
-        <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-300">{error}</p>
-      ) : products.length === 0 ? (
-        <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">
-          {debounced ? `No results for “${debounced}”.` : `No ${label.toLowerCase()} available yet.`}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {products.map((p) => (
-            <ProductCard key={p._id} product={p} />
-          ))}
+      {selectedVendor && (
+        <div className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card">
+          <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-3xl">
+            {selectedVendor.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={selectedVendor.logoUrl} alt={selectedVendor.name} className="h-full w-full object-cover" />
+            ) : (
+              (selectedVendor.emoji ?? meta.emoji)
+            )}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-brand">{selectedVendor.name}</p>
+            {(selectedVendor.tagline || selectedVendor.description) && (
+              <p className="truncate text-xs text-steel">{selectedVendor.tagline ?? selectedVendor.description}</p>
+            )}
+            <p className="mt-1 text-xs text-steel">{formatVendorMeta(selectedVendor)}</p>
+          </div>
         </div>
       )}
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-bold text-brand">{selectedVendor ? "Menu" : meta.sectionTitle}</p>
+          {!loading && !error && <span className="text-xs text-steel">{products.length} items</span>}
+        </div>
+
+        {loading ? (
+          <div className={isGrid ? "grid grid-cols-2 gap-3" : "space-y-3"}>
+            {[0, 1, 2, 3].slice(0, isGrid ? 4 : 3).map((i) => (
+              <div
+                key={i}
+                className={`animate-pulse rounded-2xl bg-white shadow-card ${isGrid ? "h-[208px]" : "h-[88px]"}`}
+              />
+            ))}
+          </div>
+        ) : error ? (
+          <p className="rounded-2xl bg-white p-4 text-center text-xs text-red-500 shadow-card">{error}</p>
+        ) : products.length === 0 ? (
+          <p className="rounded-2xl bg-white p-6 text-center text-xs text-steel shadow-card">
+            {debounced ? `Nothing matches “${debounced}”.` : `No ${label.toLowerCase()} available yet.`}
+          </p>
+        ) : (
+          <div className={isGrid ? "grid grid-cols-2 gap-3" : "space-y-3"}>
+            {products.map((p) => (
+              <ProductCard key={p._id} product={p} layout={meta.layout} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

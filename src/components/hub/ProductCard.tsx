@@ -5,7 +5,7 @@ import { useCart } from "@/contexts/CartContext";
 import { formatNaira } from "@/lib/hub/config";
 import type { HubProduct } from "@/lib/hub/types";
 
-export default function ProductCard({ product }: { product: HubProduct }) {
+export default function ProductCard({ product, layout }: { product: HubProduct; layout: "list" | "grid" }) {
   const { addItem, replaceWith, setQuantity, quantityOf } = useCart();
   const qty = quantityOf(product._id);
   const orderable = product.isAvailable && product.vendor.isOpen;
@@ -15,6 +15,7 @@ export default function ProductCard({ product }: { product: HubProduct }) {
     name: product.name,
     priceKobo: product.priceKobo,
     imageUrl: product.imageUrl,
+    emoji: product.emoji,
     vendorId: product.vendor._id,
     vendorName: product.vendor.name,
   };
@@ -29,58 +30,76 @@ export default function ProductCard({ product }: { product: HubProduct }) {
     }
   }
 
-  return (
-    <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
-      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-slate-100 dark:bg-slate-800">
-        {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl">{product.emoji ?? "🛍️"}</div>
-        )}
-      </div>
+  const control = !orderable ? (
+    <span className="text-[11px] font-semibold text-steel">{product.vendor.isOpen ? "Sold out" : "Closed"}</span>
+  ) : qty === 0 ? (
+    <button
+      type="button"
+      onClick={handleAdd}
+      className="rounded-xl bg-sunshine px-3.5 py-1.5 text-xs font-bold text-brand active:scale-95"
+    >
+      Add
+    </button>
+  ) : (
+    <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => setQuantity(product._id, qty - 1)}
+        aria-label="Decrease quantity"
+        className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-brand"
+      >
+        <Minus className="h-3.5 w-3.5" />
+      </button>
+      <span className="w-4 text-center text-xs font-bold text-brand">{qty}</span>
+      <button
+        type="button"
+        onClick={() => setQuantity(product._id, qty + 1)}
+        aria-label="Increase quantity"
+        className="flex h-7 w-7 items-center justify-center rounded-lg bg-sunshine text-brand"
+      >
+        <Plus className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
 
-      <div className="flex min-w-0 flex-1 flex-col justify-between">
-        <div>
-          <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{product.name}</p>
-          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+  const picture = product.imageUrl ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+  ) : (
+    (product.emoji ?? "🛍️")
+  );
+
+  if (layout === "list") {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card">
+        <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-3xl">
+          {picture}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-bold text-brand">{product.name}</p>
+          <p className="truncate text-xs text-steel">
             {product.vendor.name}
             {product.unit ? ` · ${product.unit}` : ""}
           </p>
+          <div className="mt-1.5 flex items-center justify-between gap-2">
+            <span className="text-sm font-bold text-brand-accent">{formatNaira(product.priceKobo)}</span>
+            {control}
+          </div>
         </div>
+      </div>
+    );
+  }
 
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-brand dark:text-white">{formatNaira(product.priceKobo)}</span>
-
-          {!orderable ? (
-            <span className="text-xs text-slate-400">{product.vendor.isOpen ? "Sold out" : "Closed"}</span>
-          ) : qty === 0 ? (
-            <button
-              onClick={handleAdd}
-              className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white active:scale-95"
-            >
-              Add
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setQuantity(product._id, qty - 1)}
-                aria-label="Decrease quantity"
-                className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 dark:border-slate-700"
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </button>
-              <span className="w-4 text-center text-sm font-semibold">{qty}</span>
-              <button
-                onClick={() => setQuantity(product._id, qty + 1)}
-                aria-label="Increase quantity"
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
+  return (
+    <div className="flex flex-col rounded-2xl bg-white p-3 shadow-card">
+      <div className="flex h-24 w-full items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-4xl">
+        {picture}
+      </div>
+      <p className="mt-2 line-clamp-2 min-h-[2rem] text-xs font-semibold leading-tight text-brand">{product.name}</p>
+      <p className="mt-0.5 truncate text-[11px] text-steel">{product.unit ?? product.vendor.name}</p>
+      <div className="mt-2 flex items-center justify-between gap-1">
+        <span className="text-xs font-bold text-brand-accent">{formatNaira(product.priceKobo)}</span>
+        {control}
       </div>
     </div>
   );

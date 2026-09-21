@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/dashboard/hub/orders/${order._id}`,
       metadata: { orderId: String(order._id), source: "crafteey-hub" },
     });
-    return NextResponse.json({ authorizationUrl: init.authorization_url, reference });
+    return NextResponse.json({ accessCode: init.access_code, authorizationUrl: init.authorization_url, reference });
   } catch (e) {
     return handleError(e);
   }

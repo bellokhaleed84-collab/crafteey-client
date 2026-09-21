@@ -18,6 +18,7 @@ export interface CartItem {
   name: string;
   priceKobo: number;
   imageUrl?: string;
+  emoji?: string;
   vendorId: string;
   vendorName: string;
   quantity: number;

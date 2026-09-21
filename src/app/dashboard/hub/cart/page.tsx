@@ -10,62 +10,79 @@ export default function CartPage() {
     useCart();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/dashboard/hub"
-          aria-label="Back to Hub"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/hub" aria-label="Back to Hub" className="text-brand">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <h1 className="text-lg font-bold text-brand">Your Cart</h1>
+        </div>
+        <Link href="/dashboard/hub/orders" className="text-xs font-semibold text-brand-accent">
+          My orders
         </Link>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Your cart</h1>
       </div>
 
-      {!hydrated ? null : items.length === 0 ? (
-        <div className="py-16 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Your cart is empty.</p>
-          <Link href="/dashboard/hub" className="mt-3 inline-block text-sm font-semibold text-brand dark:text-white">
+      {!hydrated ? (
+        <div className="h-24 animate-pulse rounded-2xl bg-white shadow-card" />
+      ) : items.length === 0 ? (
+        <div className="rounded-2xl bg-white p-8 text-center shadow-card">
+          <p className="text-5xl">🛒</p>
+          <p className="mt-3 text-sm font-bold text-brand">Your cart is empty</p>
+          <p className="mt-1 text-xs text-steel">Add something tasty from the Hub.</p>
+          <Link
+            href="/dashboard/hub"
+            className="mt-4 inline-block rounded-xl bg-sunshine px-5 py-2.5 text-xs font-bold text-brand"
+          >
             Browse the Hub
           </Link>
         </div>
       ) : (
         <>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Ordering from <span className="font-semibold text-slate-900 dark:text-white">{vendorName}</span>
-          </p>
+          <div className="rounded-2xl bg-sunshine p-5">
+            <p className="text-xs font-medium text-brand/70">Ordering from</p>
+            <p className="text-base font-extrabold text-brand">{vendorName}</p>
+          </div>
 
           <div className="space-y-3">
             {items.map((i) => (
-              <div
-                key={i.productId}
-                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
-              >
+              <div key={i.productId} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card">
+                <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-2xl">
+                  {i.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={i.imageUrl} alt={i.name} className="h-full w-full object-cover" />
+                  ) : (
+                    (i.emoji ?? "🛍️")
+                  )}
+                </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{i.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{formatNaira(i.priceKobo)} each</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setQuantity(i.productId, i.quantity - 1)}
-                    aria-label="Decrease quantity"
-                    className="flex h-7 w-7 items-center justify-center rounded-full border border-slate-300 dark:border-slate-700"
-                  >
-                    <Minus className="h-3.5 w-3.5" />
-                  </button>
-                  <span className="w-5 text-center text-sm font-semibold">{i.quantity}</span>
-                  <button
-                    onClick={() => setQuantity(i.productId, i.quantity + 1)}
-                    aria-label="Increase quantity"
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-brand text-white"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
+                  <p className="truncate text-sm font-bold text-brand">{i.name}</p>
+                  <p className="text-xs font-bold text-brand-accent">{formatNaira(i.priceKobo * i.quantity)}</p>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(i.productId, i.quantity - 1)}
+                      aria-label="Decrease quantity"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-brand"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="w-5 text-center text-xs font-bold text-brand">{i.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuantity(i.productId, i.quantity + 1)}
+                      aria-label="Increase quantity"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-sunshine text-brand"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => removeItem(i.productId)}
                   aria-label={`Remove ${i.name}`}
-                  className="text-slate-400 hover:text-red-500"
+                  className="self-start p-1 text-red-400"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -73,34 +90,36 @@ export default function CartPage() {
             ))}
           </div>
 
-          <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-            <Row label="Subtotal" value={formatNaira(subtotalKobo)} />
-            <Row label="Delivery fee" value={formatNaira(deliveryFeeKobo)} />
-            <div className="border-t border-slate-200 pt-2 dark:border-slate-800">
-              <Row label="Total" value={formatNaira(totalKobo)} bold />
+          <div className="space-y-2 rounded-2xl bg-white p-4 text-sm shadow-card">
+            <div className="flex justify-between text-steel">
+              <span>Subtotal</span>
+              <span className="font-semibold text-brand">{formatNaira(subtotalKobo)}</span>
+            </div>
+            <div className="flex justify-between text-steel">
+              <span>Delivery fee</span>
+              <span className="font-semibold text-brand">{formatNaira(deliveryFeeKobo)}</span>
+            </div>
+            <div className="flex justify-between border-t border-slate-100 pt-2 font-bold text-brand">
+              <span>Total</span>
+              <span>{formatNaira(totalKobo)}</span>
             </div>
           </div>
 
-          <Link
-            href="/dashboard/hub/checkout"
-            className="block rounded-2xl bg-brand py-3 text-center text-sm font-semibold text-white"
-          >
-            Checkout
-          </Link>
-          <button onClick={clear} className="w-full text-center text-xs text-slate-500 underline dark:text-slate-400">
+          <div className="sticky bottom-20 z-20">
+            <Link
+              href="/dashboard/hub/checkout"
+              className="flex items-center justify-between rounded-2xl bg-sunshine px-5 py-3.5 text-brand shadow-card"
+            >
+              <span className="text-sm font-extrabold">Go to checkout</span>
+              <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>
+            </Link>
+          </div>
+
+          <button type="button" onClick={clear} className="w-full text-center text-xs font-semibold text-steel underline">
             Clear cart
           </button>
         </>
       )}
-    </div>
-  );
-}
-
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div className={`flex justify-between ${bold ? "font-bold text-slate-900 dark:text-white" : "text-slate-600 dark:text-slate-300"}`}>
-      <span>{label}</span>
-      <span>{value}</span>
     </div>
   );
 }

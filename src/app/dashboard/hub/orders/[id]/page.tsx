@@ -6,149 +6,197 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Check } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
-import { formatNaira, HUB_ORDER_STATUS_LABELS, type HubOrderStatus } from "@/lib/hub/config";
+import { usePaystackPopup } from "@/lib/hub/usePaystackPopup";
+import { formatNaira, type HubOrderStatus } from "@/lib/hub/config";
 import type { HubOrderDTO } from "@/lib/hub/types";
 
-const STEPS: HubOrderStatus[] = ["paid", "preparing", "out_for_delivery", "delivered"];
+const STEPS: { key: HubOrderStatus; label: string }[] = [
+  { key: "paid", label: "Order placed" },
+  { key: "preparing", label: "Preparing" },
+  { key: "out_for_delivery", label: "On the way" },
+  { key: "delivered", label: "Delivered" },
+];
+
+const HERO: Record<HubOrderStatus, { emoji: string; title: string; text: string }> = {
+  pending_payment: { emoji: "⏳", title: "Awaiting payment", text: "Complete your payment to place this order." },
+  paid: { emoji: "✅", title: "Order placed", text: "Payment received. The vendor will start preparing it soon." },
+  preparing: { emoji: "👨‍🍳", title: "Being prepared", text: "Your order is being prepared." },
+  out_for_delivery: { emoji: "🛵", title: "On the way", text: "A rider is bringing your order." },
+  delivered: { emoji: "🎉", title: "Delivered", text: "Enjoy! Thanks for ordering with Crafteey." },
+  cancelled: { emoji: "❌", title: "Cancelled", text: "This order was cancelled." },
+};
 
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const reference = useSearchParams().get("reference");
   const router = useRouter();
   const api = useHubApi();
+  const openPaystack = usePaystackPopup();
   const { clear } = useCart();
 
   const [order, setOrder] = useState<HubOrderDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(Boolean(reference));
   const [paying, setPaying] = useState(false);
-  const verified = useRef(false);
+  const started = useRef(false);
 
-  const load = useCallback(async () => {
+  const fetchOrder = useCallback(async () => {
     try {
-      // Coming back from Paystack: confirm the payment on the server first.
-      if (reference && !verified.current) {
-        verified.current = true;
-        try {
-          const v = await api<{ paid: boolean }>(`/api/hub/paystack/verify?reference=${encodeURIComponent(reference)}`);
-          if (v.paid) clear();
-        } catch {
-          /* the webhook may still confirm it; fall through and show the order */
-        }
-        router.replace(`/dashboard/hub/orders/${id}`);
-      }
       const d = await api<{ order: HubOrderDTO }>(`/api/hub/orders/${id}`);
       setOrder(d.order);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load order");
     }
-  }, [api, id, reference, clear, router]);
+  }, [api, id]);
+
+  /** Ask the server to check the payment with Paystack, then refresh the order. */
+  const confirmPayment = useCallback(
+    async (ref: string) => {
+      setConfirming(true);
+      try {
+        const v = await api<{ paid: boolean }>(`/api/hub/paystack/verify?reference=${encodeURIComponent(ref)}`);
+        if (v.paid) clear();
+      } catch {
+        /* the webhook may still confirm it */
+      }
+      await fetchOrder();
+      setConfirming(false);
+    },
+    [api, clear, fetchOrder]
+  );
 
   useEffect(() => {
-    load();
-  }, [load]);
+    if (started.current) return;
+    started.current = true;
+    if (reference) {
+      confirmPayment(reference).finally(() => router.replace(`/dashboard/hub/orders/${id}`));
+    } else {
+      fetchOrder();
+    }
+  }, [reference, id, confirmPayment, fetchOrder, router]);
 
-  // Keep the status fresh while the order is in progress
+  // keep fresh while the order is in progress
   useEffect(() => {
     if (!order || order.status === "delivered" || order.status === "cancelled") return;
-    const t = setInterval(load, 20000);
+    const t = setInterval(fetchOrder, 20000);
     return () => clearInterval(t);
-  }, [order, load]);
+  }, [order, fetchOrder]);
 
   async function payNow() {
     setPaying(true);
+    setError(null);
     try {
-      const r = await api<{ authorizationUrl: string }>(`/api/hub/orders/${id}/pay`, { method: "POST" });
-      window.location.href = r.authorizationUrl;
+      const r = await api<{ accessCode: string }>(`/api/hub/orders/${id}/pay`, { method: "POST" });
+      await openPaystack(r.accessCode, {
+        onSuccess: (ref) => {
+          setPaying(false);
+          confirmPayment(ref);
+        },
+        onCancel: () => setPaying(false),
+        onError: (m) => {
+          setPaying(false);
+          setError(m);
+        },
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start payment");
       setPaying(false);
     }
   }
 
-  const stepIndex = order ? STEPS.indexOf(order.status) : -1;
+  const stepIndex = order ? STEPS.findIndex((s) => s.key === order.status) : -1;
+  const hero = order ? HERO[order.status] : null;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link
-          href="/dashboard/hub/orders"
-          aria-label="Back to orders"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
+        <Link href="/dashboard/hub/orders" aria-label="Back to orders" className="text-brand">
+          <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Order status</h1>
+        <h1 className="text-lg font-bold text-brand">Order Status</h1>
       </div>
 
-      {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-300">{error}</p>}
-      {!order && !error && <p className="text-sm text-slate-500">Loading…</p>}
+      {error && <p className="rounded-2xl bg-red-50 p-4 text-center text-xs text-red-600">{error}</p>}
 
-      {order && (
+      {confirming ? (
+        <div className="rounded-2xl bg-sunshine p-6 text-center">
+          <p className="text-4xl">⏳</p>
+          <p className="mt-2 text-sm font-extrabold text-brand">Confirming your payment…</p>
+          <p className="mt-1 text-xs font-medium text-brand/70">This only takes a moment.</p>
+        </div>
+      ) : !order ? (
+        !error && <div className="h-32 animate-pulse rounded-2xl bg-white shadow-card" />
+      ) : (
         <>
-          {order.status === "pending_payment" ? (
-            <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                {order.payment.status === "failed" ? "Your payment didn’t go through." : "This order hasn’t been paid for yet."}
-              </p>
-              <button
-                onClick={payNow}
-                disabled={paying}
-                className="w-full rounded-xl bg-brand py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-              >
-                {paying ? "Redirecting…" : `Pay ${formatNaira(order.totalKobo)}`}
-              </button>
+          <div className="flex items-center justify-between rounded-2xl bg-sunshine p-5">
+            <div>
+              <p className="text-base font-extrabold text-brand">{hero!.title}</p>
+              <p className="mt-1 text-xs font-medium text-brand/70">{hero!.text}</p>
             </div>
-          ) : order.status === "cancelled" ? (
-            <p className="rounded-2xl bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-              This order was cancelled.
-            </p>
-          ) : (
-            <ol className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <span className="text-4xl" aria-hidden>
+              {hero!.emoji}
+            </span>
+          </div>
+
+          {order.status === "pending_payment" && (
+            <button
+              type="button"
+              onClick={payNow}
+              disabled={paying}
+              className="flex w-full items-center justify-between rounded-2xl bg-white px-5 py-3.5 text-brand shadow-card disabled:opacity-60"
+            >
+              <span className="text-sm font-extrabold">{paying ? "Waiting for payment…" : "Pay now"}</span>
+              <span className="text-sm font-extrabold text-brand-accent">{formatNaira(order.totalKobo)}</span>
+            </button>
+          )}
+
+          {stepIndex >= 0 && (
+            <ol className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
               {STEPS.map((s, i) => {
                 const done = i <= stepIndex;
                 return (
-                  <li key={s} className="flex items-center gap-3">
+                  <li key={s.key} className="flex items-center gap-3">
                     <span
-                      className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${
-                        done ? "bg-brand text-white" : "bg-slate-200 text-slate-400 dark:bg-slate-800"
+                      className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                        done ? "bg-sunshine text-brand" : "bg-surface-muted text-steel"
                       }`}
                     >
-                      {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                      {done ? <Check className="h-4 w-4" /> : i + 1}
                     </span>
-                    <span className={`text-sm ${done ? "font-semibold text-slate-900 dark:text-white" : "text-slate-400"}`}>
-                      {HUB_ORDER_STATUS_LABELS[s]}
-                    </span>
+                    <span className={`text-sm ${done ? "font-bold text-brand" : "text-steel"}`}>{s.label}</span>
                   </li>
                 );
               })}
             </ol>
           )}
 
-          <div className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
-            <p className="font-semibold text-slate-900 dark:text-white">{order.vendorName}</p>
+          <div className="space-y-2 rounded-2xl bg-white p-4 shadow-card">
+            <p className="text-sm font-bold text-brand">🧾 {order.vendorName}</p>
             {order.items.map((i) => (
-              <div key={i.productId} className="flex justify-between text-slate-600 dark:text-slate-300">
-                <span>
+              <div key={i.productId} className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate text-brand">
                   {i.quantity} × {i.name}
                 </span>
-                <span>{formatNaira(i.unitPriceKobo * i.quantity)}</span>
+                <span className="shrink-0 font-semibold text-brand">{formatNaira(i.unitPriceKobo * i.quantity)}</span>
               </div>
             ))}
-            <div className="flex justify-between border-t border-slate-200 pt-2 text-slate-600 dark:border-slate-800 dark:text-slate-300">
-              <span>Delivery fee</span>
-              <span>{formatNaira(order.deliveryFeeKobo)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-slate-900 dark:text-white">
-              <span>Total</span>
-              <span>{formatNaira(order.totalKobo)}</span>
+            <div className="space-y-1.5 border-t border-slate-100 pt-2 text-sm">
+              <div className="flex justify-between text-steel">
+                <span>Delivery fee</span>
+                <span className="font-semibold text-brand">{formatNaira(order.deliveryFeeKobo)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-brand">
+                <span>Total</span>
+                <span>{formatNaira(order.totalKobo)}</span>
+              </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Delivering to</p>
-            <p className="mt-1">{order.delivery.address}</p>
-            {order.delivery.phone && <p>{order.delivery.phone}</p>}
+          <div className="rounded-2xl bg-white p-4 shadow-card">
+            <p className="text-sm font-bold text-brand">📍 Delivering to</p>
+            <p className="mt-1 text-sm text-steel">{order.delivery.address}</p>
+            {order.delivery.phone && <p className="text-sm text-steel">{order.delivery.phone}</p>}
           </div>
         </>
       )}

@@ -4,8 +4,17 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useHubApi } from "@/lib/hub/useHubApi";
-import { formatNaira, HUB_ORDER_STATUS_LABELS } from "@/lib/hub/config";
+import { formatNaira, HUB_ORDER_STATUS_LABELS, type HubOrderStatus } from "@/lib/hub/config";
 import type { HubOrderDTO } from "@/lib/hub/types";
+
+const STATUS_EMOJI: Record<HubOrderStatus, string> = {
+  pending_payment: "⏳",
+  paid: "✅",
+  preparing: "👨‍🍳",
+  out_for_delivery: "🛵",
+  delivered: "🎉",
+  cancelled: "❌",
+};
 
 export default function HubOrdersPage() {
   const api = useHubApi();
@@ -19,42 +28,57 @@ export default function HubOrdersPage() {
   }, [api]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link
-          href="/dashboard/hub"
-          aria-label="Back to Hub"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
+        <Link href="/dashboard/hub" aria-label="Back to Hub" className="text-brand">
+          <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-xl font-bold text-slate-900 dark:text-white">Hub orders</h1>
+        <h1 className="text-lg font-bold text-brand">My Orders</h1>
       </div>
 
       {error ? (
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="rounded-2xl bg-white p-4 text-center text-xs text-red-500 shadow-card">{error}</p>
       ) : !orders ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <div className="space-y-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-[76px] animate-pulse rounded-2xl bg-white shadow-card" />
+          ))}
+        </div>
       ) : orders.length === 0 ? (
-        <p className="py-12 text-center text-sm text-slate-500 dark:text-slate-400">No orders yet.</p>
+        <div className="rounded-2xl bg-white p-8 text-center shadow-card">
+          <p className="text-5xl">🧾</p>
+          <p className="mt-3 text-sm font-bold text-brand">No orders yet</p>
+          <Link
+            href="/dashboard/hub"
+            className="mt-4 inline-block rounded-xl bg-sunshine px-5 py-2.5 text-xs font-bold text-brand"
+          >
+            Browse the Hub
+          </Link>
+        </div>
       ) : (
         <div className="space-y-3">
           {orders.map((o) => (
             <Link
               key={o._id}
               href={`/dashboard/hub/orders/${o._id}`}
-              className="block rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+              className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card"
             >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-slate-900 dark:text-white">{o.vendorName}</p>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-                  {HUB_ORDER_STATUS_LABELS[o.status]}
-                </span>
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-2xl">
+                {STATUS_EMOJI[o.status]}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="truncate text-sm font-bold text-brand">{o.vendorName}</p>
+                  <span className="shrink-0 rounded-lg bg-sunshine/30 px-2 py-0.5 text-[11px] font-semibold text-brand">
+                    {HUB_ORDER_STATUS_LABELS[o.status]}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-steel">
+                  {o.items.reduce((s, i) => s + i.quantity, 0)} items ·{" "}
+                  {new Date(o.createdAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
+                </p>
+                <p className="mt-0.5 text-xs font-bold text-brand-accent">{formatNaira(o.totalKobo)}</p>
               </div>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                {o.items.reduce((s, i) => s + i.quantity, 0)} items · {formatNaira(o.totalKobo)} ·{" "}
-                {new Date(o.createdAt).toLocaleDateString("en-NG", { day: "numeric", month: "short", year: "numeric" })}
-              </p>
             </Link>
           ))}
         </div>
