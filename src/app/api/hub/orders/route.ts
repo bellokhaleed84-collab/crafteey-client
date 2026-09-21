@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     // ---- load products + enforce rules
     const products = await HubProduct.find({
-      _id: { $in: [...wanted.keys()] },
+      _id: { $in: Array.from(wanted.keys()).map((id) => new mongoose.Types.ObjectId(id)) },
       isActive: true,
       isAvailable: true,
     }).lean();
