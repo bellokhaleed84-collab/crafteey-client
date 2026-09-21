@@ -15,13 +15,11 @@ export function newReference(orderId: string): string {
 async function onOrderPaid(order: IHubOrder) {
   try {
     // Reduce stock for items that track it (null/undefined stock = unlimited)
-    await HubProduct.bulkWrite(
-      order.items.map((it) => ({
-        updateOne: {
-          filter: { _id: it.productId, stock: { $type: "number" } },
-          update: { $inc: { stock: -it.quantity } },
-        },
-      }))
+    // (only products that track stock have a numeric stock; the $gte also stops it going below zero)
+    await Promise.all(
+      order.items.map((it) =>
+        HubProduct.updateOne({ _id: it.productId, stock: { $gte: it.quantity } }, { $inc: { stock: -it.quantity } })
+      )
     );
     // TODO (step 2): create the courier request for the riders here,
     // using your existing first-come-first-served flow.
