@@ -1,0 +1,60 @@
+import mongoose, { Schema, type Model, type Types } from "mongoose";
+import { HUB_ORDER_STATUSES, type HubOrderStatus } from "../lib/hub/config";
+
+export interface IHubOrder {
+  _id: Types.ObjectId;
+  clientId: Types.ObjectId;
+  firebaseUid: string;
+  vendorId: Types.ObjectId;
+  vendorName: string;
+  items: { productId: Types.ObjectId; name: string; imageUrl?: string; unitPriceKobo: number; quantity: number }[];
+  subtotalKobo: number;
+  deliveryFeeKobo: number;
+  totalKobo: number;
+  status: HubOrderStatus;
+  payment: { reference?: string; status: "pending" | "success" | "failed"; paidAt?: Date; channel?: string };
+  delivery: { address: string; phone?: string; note?: string };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const HubOrderSchema = new Schema<IHubOrder>(
+  {
+    clientId: { type: Schema.Types.ObjectId, required: true, index: true },
+    firebaseUid: { type: String, required: true, index: true },
+    vendorId: { type: Schema.Types.ObjectId, ref: "HubVendor", required: true, index: true },
+    vendorName: { type: String, required: true },
+    items: [
+      {
+        _id: false,
+        productId: { type: Schema.Types.ObjectId, ref: "HubProduct", required: true },
+        name: { type: String, required: true },
+        imageUrl: String,
+        unitPriceKobo: { type: Number, required: true },
+        quantity: { type: Number, required: true, min: 1 },
+      },
+    ],
+    subtotalKobo: { type: Number, required: true },
+    deliveryFeeKobo: { type: Number, required: true },
+    totalKobo: { type: Number, required: true },
+    status: { type: String, enum: HUB_ORDER_STATUSES, default: "pending_payment", index: true },
+    payment: {
+      reference: { type: String, unique: true, sparse: true },
+      status: { type: String, enum: ["pending", "success", "failed"], default: "pending" },
+      paidAt: Date,
+      channel: String,
+    },
+    delivery: {
+      address: { type: String, required: true },
+      phone: String,
+      note: String,
+    },
+  },
+  { timestamps: true }
+);
+
+const HubOrder: Model<IHubOrder> =
+  (mongoose.models.HubOrder as Model<IHubOrder>) ||
+  mongoose.model<IHubOrder>("HubOrder", HubOrderSchema);
+
+export default HubOrder;

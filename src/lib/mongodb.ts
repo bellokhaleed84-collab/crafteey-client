@@ -31,3 +31,4 @@ export async function connectToDatabase(): Promise<typeof mongoose> {
   cached.conn = await cached.promise;
   return cached.conn;
 }
+
