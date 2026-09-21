@@ -9,6 +9,10 @@ export type VehicleType = "bicycle" | "motorcycle" | "cargo";
 interface AddressSearchOverlayProps {
   initialPickup?: string;
   initialDropoff?: string;
+  // New — lets the Rides page open this overlay with a vehicle already
+  // selected when the rider taps a Bicycle/Motorcycle/Cargo card. Optional,
+  // so any other caller keeps working exactly as before.
+  defaultVehicleType?: VehicleType | null;
   error?: string | null;
   submitting?: boolean;
   onClose: () => void;
@@ -28,7 +32,8 @@ interface AddressSearchOverlayProps {
 
 // Simple inline motorcycle icon — lucide doesn't ship one, so this is a
 // minimal custom SVG rather than reusing the bicycle icon for both.
-function MotorcycleIcon({ className }: { className?: string }) {
+// Exported so the Rides page can reuse the same icon on its vehicle cards.
+export function MotorcycleIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className={className}>
       <circle cx="5" cy="17" r="2.5" />
@@ -51,6 +56,7 @@ const VEHICLE_OPTIONS: { key: VehicleType; label: string; icon: (p: { className?
 export default function AddressSearchOverlay({
   initialPickup = "",
   initialDropoff = "",
+  defaultVehicleType = null,
   error,
   submitting = false,
   onClose,
@@ -61,7 +67,7 @@ export default function AddressSearchOverlay({
   const [pickupPlace, setPickupPlace] = useState<PlaceResult | null>(null);
   const [dropoffPlace, setDropoffPlace] = useState<PlaceResult | null>(null);
   const [note, setNote] = useState("");
-  const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
+  const [vehicleType, setVehicleType] = useState<VehicleType | null>(defaultVehicleType);
 
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
