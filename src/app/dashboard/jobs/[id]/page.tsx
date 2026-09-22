@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import QRCode from "qrcode.react";
 import { useAuth } from "@/contexts/AuthContext";
 import { JOB_STATUS } from "@/lib/constants";
+import { DetailSkeleton } from "@/components/ui/Skeleton";
 
 interface Job {
   _id: string;
@@ -55,7 +56,7 @@ export default function JobDetailPage() {
   }, [loadJob]);
 
   if (loading) {
-    return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
+    return <DetailSkeleton />;
   }
 
   if (error || !job) {

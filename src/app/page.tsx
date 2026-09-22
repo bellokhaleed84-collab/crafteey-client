@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { FullScreenSkeleton } from "@/components/ui/Skeleton";
 
 export default function HomePage() {
   const { user, client, loading } = useAuth();
@@ -20,9 +21,5 @@ export default function HomePage() {
     }
   }, [loading, user, client, router]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-slate-500">Loading…</p>
-    </div>
-  );
+  return <FullScreenSkeleton />;
 }

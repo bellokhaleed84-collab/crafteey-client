@@ -22,6 +22,7 @@ import AddressSearchOverlay, {
   MotorcycleIcon,
   type VehicleType,
 } from "@/components/map/AddressSearchOverlay";
+import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 
 interface CourierRequest {
   _id: string;
@@ -437,7 +438,17 @@ export default function RiderPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>;
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-32 w-full rounded-3xl" />
+        <div className="space-y-3">
+          <Skeleton className="h-4 w-40" />
+          <SkeletonList count={3} />
+        </div>
+      </div>
+    );
+  }
 
   const hasActiveRequest = !!active && active.status !== COURIER_STATUS.CANCELLED;
   const pickupCoords: LatLng | null =

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardNav from "@/components/DashboardNav";
+import { FullScreenSkeleton } from "@/components/ui/Skeleton";
 
 export default function DashboardLayout({
   children,
@@ -24,11 +25,7 @@ export default function DashboardLayout({
   }, [loading, user, client, router]);
 
   if (loading || !user || !client) {
-    return (
-      <div className="flex min-h-screen items-center justify-center dark:bg-slate-950">
-        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
-      </div>
-    );
+    return <FullScreenSkeleton />;
   }
 
   return (

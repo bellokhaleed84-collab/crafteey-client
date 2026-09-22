@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Droplet, Zap, PaintBucket, Hammer } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { JOB_STATUS } from "@/lib/constants";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 interface Job {
   _id: string;
@@ -109,7 +110,7 @@ export default function TechniciansPage() {
         <p className="mb-3 text-sm font-bold text-brand">Your requests</p>
 
         {loading ? (
-          <p className="text-sm text-steel">Loading…</p>
+          <SkeletonList count={3} />
         ) : jobs.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
             <p className="text-sm text-steel">You haven't posted a job yet.</p>
