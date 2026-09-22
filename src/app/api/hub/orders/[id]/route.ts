@@ -3,14 +3,11 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { verifyToken } from "@/middleware/auth";
 import HubOrder from "@/models/HubOrder";
-import { getClientByUid } from "@/lib/hub/getClient";
-import { newReference } from "@/lib/hub/orders";
-import { initializeTransaction } from "@/lib/paystack";
 import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const user = await verifyToken(req);
     if (!mongoose.isValidObjectId(params.id)) return fail("Invalid order id");
@@ -18,24 +15,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const order = await HubOrder.findOne({ _id: params.id, firebaseUid: user.uid });
     if (!order) return fail("Order not found", 404);
-    if (order.status !== "pending_payment" || order.payment.status === "success") {
-      return fail("This order doesn't need payment", 409);
-    }
 
-    const client = await getClientByUid(user.uid);
-    const reference = newReference(String(order._id));
-    order.payment.reference = reference;
-    order.payment.status = "pending";
-    await order.save();
-
-    const init = await initializeTransaction({
-      email: client?.email || user.email || "",
-      amountKobo: order.totalKobo,
-      reference,
-      callbackUrl: `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/dashboard/hub/orders/${order._id}`,
-      metadata: { orderId: String(order._id), source: "crafteey-hub" },
+    return NextResponse.json({
+      order: {
+        _id: String(order._id),
+        vendorName: order.vendorName,
+        items: order.items.map((i) => ({
+          productId: String(i.productId),
+          name: i.name,
+          imageUrl: i.imageUrl,
+          unitPriceKobo: i.unitPriceKobo,
+          quantity: i.quantity,
+        })),
+        subtotalKobo: order.subtotalKobo,
+        deliveryFeeKobo: order.deliveryFeeKobo,
+        totalKobo: order.totalKobo,
+        status: order.status,
+        delivery: {
+          address: order.delivery.address,
+          phone: order.delivery.phone,
+          note: order.delivery.note,
+        },
+        createdAt: order.createdAt,
+      },
     });
-    return NextResponse.json({ authorizationUrl: init.authorization_url, reference });
   } catch (e) {
     return handleError(e);
   }
