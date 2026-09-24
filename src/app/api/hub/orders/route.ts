@@ -9,6 +9,7 @@ import { getClientByUid } from "@/lib/hub/getClient";
 import { newReference } from "@/lib/hub/orders";
 import { initializeTransaction } from "@/lib/paystack";
 import { DELIVERY_FEE_KOBO } from "@/lib/hub/config";
+import { calculateVendorPayout } from "@/lib/pricing/vendorCommission";
 import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,6 @@ export async function POST(req: NextRequest) {
     const client = await getClientByUid(user.uid);
     if (!client) return fail("Client account not found", 404);
 
-    // Look up the real products server-side — never trust client-sent prices.
     const productIds = items.map((i) => i.productId);
     const products = await HubProduct.find({ _id: { $in: productIds }, isActive: true });
 
@@ -51,7 +51,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // All items must come from the same vendor (single-vendor cart/order).
     const vendorIds = new Set(products.map((p) => String(p.vendorId)));
     if (vendorIds.size > 1) return fail("Your cart has items from more than one vendor");
 
@@ -75,6 +74,8 @@ export async function POST(req: NextRequest) {
     const deliveryFeeKobo = DELIVERY_FEE_KOBO;
     const totalKobo = subtotalKobo + deliveryFeeKobo;
 
+    const { vendorPayout, platformVendorRevenue } = calculateVendorPayout(subtotalKobo, vendor.tier);
+
     const order = await HubOrder.create({
       clientId: client._id,
       firebaseUid: user.uid,
@@ -84,6 +85,9 @@ export async function POST(req: NextRequest) {
       subtotalKobo,
       deliveryFeeKobo,
       totalKobo,
+      vendorTier: vendor.tier,
+      vendorPayoutKobo: vendorPayout,
+      platformVendorRevenueKobo: platformVendorRevenue,
       status: "pending_payment",
       payment: { status: "pending" },
       delivery: { address, phone, note },

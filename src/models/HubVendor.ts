@@ -1,5 +1,6 @@
 import mongoose, { Schema, type Model } from "mongoose";
 import { HUB_CATEGORIES, type HubCategory } from "../lib/hub/config";
+import { type VendorTier } from "../lib/pricing/vendorCommission";
 
 export interface IHubVendor {
   name: string;
@@ -8,9 +9,7 @@ export interface IHubVendor {
   logoUrl?: string;
   address?: string;
   emoji?: string;
-  /** e.g. "Nigerian • Fast Food" */
   tagline?: string;
-  /** used by the Hub filter tabs: Local, Fast Food, Drinks, Desserts */
   filterTags?: string[];
   rating?: number;
   reviewCount?: number;
@@ -19,6 +18,7 @@ export interface IHubVendor {
   isOpen: boolean;
   isActive: boolean;
   isSeed?: boolean;
+  tier: VendorTier;
 }
 
 const HubVendorSchema = new Schema<IHubVendor>(
@@ -38,6 +38,7 @@ const HubVendorSchema = new Schema<IHubVendor>(
     isOpen: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },
     isSeed: { type: Boolean, default: false },
+    tier: { type: String, enum: ["basic", "regular", "premium"], default: "regular", index: true },
   },
   { timestamps: true }
 );

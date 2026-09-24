@@ -11,6 +11,9 @@ export interface IHubOrder {
   subtotalKobo: number;
   deliveryFeeKobo: number;
   totalKobo: number;
+  vendorTier: "basic" | "regular" | "premium";
+  vendorPayoutKobo: number;
+  platformVendorRevenueKobo: number;
   status: HubOrderStatus;
   payment: { reference?: string; status: "pending" | "success" | "failed"; paidAt?: Date; channel?: string };
   delivery: { address: string; phone?: string; note?: string };
@@ -37,6 +40,9 @@ const HubOrderSchema = new Schema<IHubOrder>(
     subtotalKobo: { type: Number, required: true },
     deliveryFeeKobo: { type: Number, required: true },
     totalKobo: { type: Number, required: true },
+    vendorTier: { type: String, enum: ["basic", "regular", "premium"], required: true },
+    vendorPayoutKobo: { type: Number, required: true },
+    platformVendorRevenueKobo: { type: Number, required: true },
     status: { type: String, enum: HUB_ORDER_STATUSES, default: "pending_payment", index: true },
     payment: {
       reference: { type: String, unique: true, sparse: true },
