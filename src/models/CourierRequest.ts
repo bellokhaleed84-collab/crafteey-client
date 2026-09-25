@@ -1,6 +1,15 @@
-// src/models/CourierRequest.ts
-import { Schema, model, models } from "mongoose";
-import { COURIER_STATUS } from "@/lib/constants";
+import { Schema, models, model } from "mongoose";
+
+const VEHICLE_TYPES = ["bicycle", "motorcycle", "cargo"] as const;
+
+const COURIER_STATUS = {
+  PENDING: "pending",
+  ACCEPTED: "accepted",
+  PICKED_UP: "picked_up",
+  EN_ROUTE: "en_route",
+  DELIVERED: "delivered",
+  CANCELLED: "cancelled",
+} as const;
 
 const CourierRequestSchema = new Schema(
   {
@@ -14,42 +23,39 @@ const CourierRequestSchema = new Schema(
     pickupLng: { type: Number, default: null },
     dropoffLat: { type: Number, default: null },
     dropoffLng: { type: Number, default: null },
-    note: { type: String, default: "" },
 
-    // Pickup contact — optional, defaults to the booking client's own
-    // name/phone (see POST /api/courier-requests) if left blank.
+    receiverName: { type: String, default: "" },
+    receiverPhone: { type: String, default: "" },
     pickupContactName: { type: String, default: "" },
     pickupContactPhone: { type: String, default: "" },
+    vehicleType: { type: String, enum: VEHICLE_TYPES, required: true, index: true },
 
-    // Receiver — who the courier actually calls at drop-off. Required.
-    receiverName: { type: String, required: true },
-    receiverPhone: { type: String, required: true },
+    note: { type: String, default: "" },
 
-    // Which vehicle the sender requested.
-    vehicleType: {
-      type: String,
-      enum: ["bicycle", "motorcycle", "cargo"],
-      required: true,
-    },
+    source: { type: String, enum: ["direct", "hub"], default: "direct", index: true },
+    hubOrderId: { type: String, default: null, index: true },
+    vendorName: { type: String, default: "" },
+    pickupCode: { type: String, default: null },
 
     status: {
       type: String,
       enum: Object.values(COURIER_STATUS),
       default: COURIER_STATUS.PENDING,
+      index: true,
     },
 
-    courierUid: { type: String, default: null },
+    declinedBy: { type: [String], default: [] },
+
+    courierUid: { type: String, default: null, index: true },
     courierName: { type: String, default: null },
     courierPhone: { type: String, default: null },
     courierLocation: {
       type: new Schema({ lat: Number, lng: Number }, { _id: false }),
       default: null,
     },
-
-    acceptedAt: { type: Date, default: null },
-    deliveredAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
-export default models.CourierRequest || model("CourierRequest", CourierRequestSchema);
+export default models.CourierRequest ||
+  model("CourierRequest", CourierRequestSchema);

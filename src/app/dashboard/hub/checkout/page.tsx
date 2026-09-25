@@ -3,33 +3,47 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Bike } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import { usePaystackPopup } from "@/lib/hub/usePaystackPopup";
 import { formatNaira } from "@/lib/hub/config";
+import MapboxAddressInput, { type PlaceResult } from "@/components/map/MapboxAddressInput";
+import { MotorcycleIcon } from "@/components/map/AddressSearchOverlay"; // adjust path if this lives elsewhere
 
 type Stage = "idle" | "creating" | "paying";
+type VehicleType = "bicycle" | "motorcycle";
 
 const input =
   "w-full rounded-xl bg-surface-muted px-4 py-3 text-sm text-brand outline-none placeholder:text-steel";
 
+const VEHICLE_OPTIONS: { key: VehicleType; label: string }[] = [
+  { key: "bicycle", label: "Bicycle" },
+  { key: "motorcycle", label: "Motorcycle" },
+];
+
 export default function CheckoutPage() {
   const router = useRouter();
   const { client } = useAuth();
-  const { items, hydrated, vendorName, subtotalKobo, deliveryFeeKobo, totalKobo, clear } = useCart();
+  const { items, hydrated, vendorId, vendorName, subtotalKobo, clear } = useCart();
   const api = useHubApi();
   const openPaystack = usePaystackPopup();
 
   const [address, setAddress] = useState("");
+  const [deliveryPlace, setDeliveryPlace] = useState<PlaceResult | null>(null);
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  // an order that was created but not paid yet (customer closed the payment window)
   const [pending, setPending] = useState<{ orderId: string; sig: string } | null>(null);
+
+  // Live delivery-fee preview
+  const [fee, setFee] = useState<{ deliveryFeeKobo: number; distanceKm: number } | null>(null);
+  const [feeLoading, setFeeLoading] = useState(false);
+  const [feeError, setFeeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (client?.phone && !phone) setPhone(client.phone);
@@ -39,19 +53,60 @@ export default function CheckoutPage() {
     if (hydrated && items.length === 0 && !done) router.replace("/dashboard/hub/cart");
   }, [hydrated, items.length, done, router]);
 
+  // Debounced live preview — refetches whenever vehicle or address changes
+  useEffect(() => {
+    if (!vendorId || !vehicleType || !deliveryPlace) {
+      setFee(null);
+      return;
+    }
+    setFeeError(null);
+    setFeeLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const r = await api<{ deliveryFeeKobo: number; distanceKm: number }>("/api/hub/delivery-fee-preview", {
+          method: "POST",
+          body: JSON.stringify({
+            vendorId,
+            vehicleType,
+            deliveryLat: deliveryPlace.lat,
+            deliveryLng: deliveryPlace.lng,
+          }),
+        });
+        setFee(r);
+      } catch (err) {
+        setFee(null);
+        setFeeError(err instanceof Error ? err.message : "Could not calculate delivery fee");
+      } finally {
+        setFeeLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [vendorId, vehicleType, deliveryPlace, api]);
+
+  function handleAddressChange(text: string) {
+    setAddress(text);
+    if (deliveryPlace && text !== deliveryPlace.address) setDeliveryPlace(null);
+  }
+
   async function pay(e: React.FormEvent) {
     e.preventDefault();
     if (stage !== "idle") return;
     setError(null);
+
+    if (!vehicleType) return setError("Please choose a delivery vehicle");
+    if (!deliveryPlace) return setError("Please select your delivery address from the suggestions list");
+
     setStage("creating");
 
     try {
-      // Same cart + details as a saved unpaid order? Reuse it instead of making a duplicate.
       const sig = JSON.stringify({
         i: items.map((i) => [i.productId, i.quantity]),
         a: address.trim(),
         p: phone.trim(),
         n: note.trim(),
+        v: vehicleType,
+        lat: deliveryPlace.lat,
+        lng: deliveryPlace.lng,
       });
 
       let orderId: string;
@@ -67,6 +122,9 @@ export default function CheckoutPage() {
           body: JSON.stringify({
             items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
             delivery: { address, phone, note },
+            vehicleType,
+            deliveryLat: deliveryPlace.lat,
+            deliveryLng: deliveryPlace.lng,
           }),
         });
         orderId = r.orderId;
@@ -77,7 +135,6 @@ export default function CheckoutPage() {
       setStage("paying");
       await openPaystack(accessCode, {
         onSuccess: (reference) => {
-          // The order page confirms the payment with the server before showing it as paid.
           setDone(true);
           clear();
           router.push(`/dashboard/hub/orders/${orderId}?reference=${encodeURIComponent(reference)}`);
@@ -98,6 +155,7 @@ export default function CheckoutPage() {
   }
 
   const busy = stage !== "idle";
+  const totalKobo = fee ? subtotalKobo + fee.deliveryFeeKobo : subtotalKobo;
 
   return (
     <form onSubmit={pay} className="space-y-6">
@@ -108,16 +166,41 @@ export default function CheckoutPage() {
         <h1 className="text-lg font-bold text-brand">Checkout</h1>
       </div>
 
+      {/* vehicle type */}
+      <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
+        <p className="text-sm font-bold text-brand">🚲 Delivery vehicle</p>
+        <div className="grid grid-cols-2 gap-2">
+          {VEHICLE_OPTIONS.map((v) => {
+            const selected = vehicleType === v.key;
+            const Icon = v.key === "bicycle" ? Bike : MotorcycleIcon;
+            return (
+              <button
+                key={v.key}
+                type="button"
+                onClick={() => setVehicleType(v.key)}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border py-3 text-xs font-semibold transition ${
+                  selected
+                    ? "border-brand-accent bg-brand-accent/10 text-brand-accent"
+                    : "border-slate-200 text-slate-500 hover:border-slate-300"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                {v.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* delivery details */}
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
         <p className="text-sm font-bold text-brand">📍 Delivery details</p>
-        <textarea
-          required
-          rows={3}
+        <MapboxAddressInput
+          label="Delivery address"
+          placeholder="Search for your delivery address"
           value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="Delivery address"
-          className={`${input} resize-none`}
+          onChange={handleAddressChange}
+          onSelect={setDeliveryPlace}
         />
         <input
           required
@@ -156,12 +239,21 @@ export default function CheckoutPage() {
             <span className="font-semibold text-brand">{formatNaira(subtotalKobo)}</span>
           </div>
           <div className="flex justify-between text-steel">
-            <span>Delivery fee</span>
-            <span className="font-semibold text-brand">{formatNaira(deliveryFeeKobo)}</span>
+            <span>Delivery fee {fee && `(${fee.distanceKm}km)`}</span>
+            <span className="font-semibold text-brand">
+              {feeLoading
+                ? "Calculating…"
+                : fee
+                ? formatNaira(fee.deliveryFeeKobo)
+                : vehicleType && deliveryPlace
+                ? "—"
+                : "Choose vehicle & address"}
+            </span>
           </div>
-          <div className="flex justify-between font-bold text-brand">
+          {feeError && <p className="text-xs text-red-600">{feeError}</p>}
+          <div className="flex justify-between border-t border-slate-100 pt-1.5 font-bold text-brand">
             <span>Total</span>
-            <span>{formatNaira(totalKobo)}</span>
+            <span>{fee ? formatNaira(totalKobo) : "—"}</span>
           </div>
         </div>
       </div>
@@ -184,7 +276,6 @@ export default function CheckoutPage() {
 
       {error && <p className="rounded-2xl bg-red-50 p-4 text-center text-xs text-red-600">{error}</p>}
 
-      {/* pay button stays in view at the bottom */}
       <div className="sticky bottom-20 z-20">
         <button
           type="submit"
@@ -194,7 +285,7 @@ export default function CheckoutPage() {
           <span className="text-sm font-extrabold">
             {stage === "creating" ? "Preparing payment…" : stage === "paying" ? "Waiting for payment…" : "Pay now"}
           </span>
-          <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>
+          {fee && <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>}
         </button>
       </div>
     </form>

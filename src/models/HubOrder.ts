@@ -14,6 +14,11 @@ export interface IHubOrder {
   vendorTier: "basic" | "regular" | "premium";
   vendorPayoutKobo: number;
   platformVendorRevenueKobo: number;
+  vehicleType: "bicycle" | "motorcycle";
+  deliveryLat: number;
+  deliveryLng: number;
+  riderEarningKobo: number;
+  platformCommissionKobo: number;
   status: HubOrderStatus;
   payment: { reference?: string; status: "pending" | "success" | "failed"; paidAt?: Date; channel?: string };
   delivery: { address: string; phone?: string; note?: string };
@@ -43,6 +48,11 @@ const HubOrderSchema = new Schema<IHubOrder>(
     vendorTier: { type: String, enum: ["basic", "regular", "premium"], required: true },
     vendorPayoutKobo: { type: Number, required: true },
     platformVendorRevenueKobo: { type: Number, required: true },
+    vehicleType: { type: String, enum: ["bicycle", "motorcycle"], required: true },
+    deliveryLat: { type: Number, required: true },
+    deliveryLng: { type: Number, required: true },
+    riderEarningKobo: { type: Number, required: true },
+    platformCommissionKobo: { type: Number, required: true },
     status: { type: String, enum: HUB_ORDER_STATUSES, default: "pending_payment", index: true },
     payment: {
       reference: { type: String, unique: true, sparse: true },

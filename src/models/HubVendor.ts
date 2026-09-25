@@ -8,6 +8,8 @@ export interface IHubVendor {
   description?: string;
   logoUrl?: string;
   address?: string;
+  lat?: number;
+  lng?: number;
   emoji?: string;
   tagline?: string;
   filterTags?: string[];
@@ -28,6 +30,8 @@ const HubVendorSchema = new Schema<IHubVendor>(
     description: String,
     logoUrl: String,
     address: String,
+    lat: Number,
+    lng: Number,
     emoji: String,
     tagline: String,
     filterTags: { type: [String], default: [] },

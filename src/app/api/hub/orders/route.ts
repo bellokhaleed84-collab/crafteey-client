@@ -8,8 +8,9 @@ import HubVendor from "@/models/HubVendor";
 import { getClientByUid } from "@/lib/hub/getClient";
 import { newReference } from "@/lib/hub/orders";
 import { initializeTransaction } from "@/lib/paystack";
-import { DELIVERY_FEE_KOBO } from "@/lib/hub/config";
 import { calculateVendorPayout } from "@/lib/pricing/vendorCommission";
+import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
+import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
 import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +29,18 @@ export async function POST(req: NextRequest) {
     const phone = delivery.phone ? String(delivery.phone).trim() : undefined;
     const note = delivery.note ? String(delivery.note).trim() : undefined;
 
+    const vehicleType = body?.vehicleType;
+    const deliveryLat = Number(body?.deliveryLat);
+    const deliveryLng = Number(body?.deliveryLng);
+
     if (items.length === 0) return fail("Your cart is empty");
     if (!address) return fail("Delivery address is required");
+    if (vehicleType !== "bicycle" && vehicleType !== "motorcycle") {
+      return fail("Please choose a delivery vehicle");
+    }
+    if (!Number.isFinite(deliveryLat) || !Number.isFinite(deliveryLng)) {
+      return fail("Please select a delivery address from the suggestions list");
+    }
     for (const it of items) {
       if (!mongoose.isValidObjectId(it.productId)) return fail("Invalid item in cart");
       if (!Number.isInteger(it.quantity) || it.quantity < 1) return fail("Invalid quantity");
@@ -58,6 +69,9 @@ export async function POST(req: NextRequest) {
     const vendor = await HubVendor.findOne({ _id: vendorId, isActive: true });
     if (!vendor) return fail("Vendor not found", 404);
     if (!vendor.isOpen) return fail("This vendor is currently closed");
+    if (typeof vendor.lat !== "number" || typeof vendor.lng !== "number") {
+      return fail("This vendor's location isn't set up yet — please try another vendor");
+    }
 
     const orderItems = items.map((it) => {
       const p = byId.get(it.productId)!;
@@ -71,7 +85,24 @@ export async function POST(req: NextRequest) {
     });
 
     const subtotalKobo = orderItems.reduce((sum, it) => sum + it.unitPriceKobo * it.quantity, 0);
-    const deliveryFeeKobo = DELIVERY_FEE_KOBO;
+
+    // Real distance-based delivery fee: vendor -> customer only (no rider
+    // assigned yet at checkout time, so the rider-to-pickup leg is 0 —
+    // matches how Chowdeck and similar apps price Hub-style orders).
+    const km = haversineKm({ lat: vendor.lat, lng: vendor.lng }, { lat: deliveryLat, lng: deliveryLng });
+    const minutes = estimateMinutes(km, vehicleType);
+
+    const feeResult = calculateDeliveryFee({
+      vehicleType,
+      riderToPickupKm: 0,
+      riderToPickupMinutes: 0,
+      pickupToDropoffKm: km,
+      pickupToDropoffMinutes: minutes,
+    });
+
+    const deliveryFeeKobo = Math.round(feeResult.deliveryFee * 100);
+    const riderEarningKobo = Math.round(feeResult.riderEarning * 100);
+    const platformCommissionKobo = Math.round(feeResult.platformCommission * 100);
     const totalKobo = subtotalKobo + deliveryFeeKobo;
 
     const { vendorPayout, platformVendorRevenue } = calculateVendorPayout(subtotalKobo, vendor.tier);
@@ -88,6 +119,11 @@ export async function POST(req: NextRequest) {
       vendorTier: vendor.tier,
       vendorPayoutKobo: vendorPayout,
       platformVendorRevenueKobo: platformVendorRevenue,
+      vehicleType,
+      deliveryLat,
+      deliveryLng,
+      riderEarningKobo,
+      platformCommissionKobo,
       status: "pending_payment",
       payment: { status: "pending" },
       delivery: { address, phone, note },
