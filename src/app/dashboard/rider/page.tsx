@@ -671,7 +671,10 @@ export default function RiderPage() {
           onConfirm={handleConfirmRequest}
         />
       )}
-      {searching && <SearchingOverlay onCancel={handleCancelSearch} />}
+    
+     {searching && (
+  <SearchingOverlay pickup={pickupCoords} dropoff={dropoffCoords} onCancel={handleCancelSearch} />
+)}
     </>
   );
 }

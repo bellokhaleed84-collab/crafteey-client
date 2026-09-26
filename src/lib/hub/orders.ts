@@ -10,16 +10,15 @@ export function newReference(orderId: string): string {
   return `hub-${orderId}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
+export function newOrderNumber(): string {
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `CRF-${random}`;
+}
+
 function generatePickupCode(): string {
-  // 6-digit numeric code, zero-padded so it's always exactly 6 digits.
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-/**
- * Runs exactly once per order, right after payment is confirmed.
- * Reduces stock, then creates the CourierRequest so a rider can pick up
- * and deliver this order.
- */
 async function onOrderPaid(order: IHubOrder) {
   try {
     await Promise.all(
@@ -37,13 +36,9 @@ async function onOrderPaid(order: IHubOrder) {
     const pickupCode = generatePickupCode();
 
     await CourierRequest.create({
-      // These fields exist for the direct-booking flow's schema shape;
-      // for a Hub order there's no "client" booking a courier directly —
-      // the customer is the recipient, not the requester. Filled with the
-      // Hub customer's info so the schema's required fields are satisfied.
       clientUid: order.firebaseUid,
-      clientName: order.vendorName, // shown to riders as who they're picking up from
-      clientPhone: "", // not required for Hub-sourced requests; vendor has no phone on file yet
+      clientName: order.vendorName,
+      clientPhone: "",
 
       pickup: vendor.address || order.vendorName,
       dropoff: order.delivery.address,
@@ -52,16 +47,18 @@ async function onOrderPaid(order: IHubOrder) {
       dropoffLat: order.deliveryLat,
       dropoffLng: order.deliveryLng,
 
-      receiverName: "", // Hub orders don't collect a separate receiver name today
+      receiverName: "",
       receiverPhone: order.delivery.phone || "",
       pickupContactName: vendor.name,
       pickupContactPhone: "",
 
       vehicleType: order.vehicleType,
       note: order.delivery.note || "",
+      riderEarningKobo: order.riderEarningKobo,
 
       source: "hub",
       hubOrderId: String(order._id),
+      orderNumber: order.orderNumber,
       vendorName: vendor.name,
       pickupCode,
     });

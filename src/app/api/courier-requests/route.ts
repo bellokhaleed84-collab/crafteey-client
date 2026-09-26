@@ -4,6 +4,8 @@ import { connectToDatabase } from "@/lib/mongodb";
 import CourierRequest from "@/models/CourierRequest";
 import Client from "@/models/Client";
 import { COURIER_STATUS } from "@/lib/constants";
+import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
+import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
 
 const VALID_VEHICLE_TYPES = ["bicycle", "motorcycle", "cargo"] as const;
 type VehicleType = (typeof VALID_VEHICLE_TYPES)[number];
@@ -25,6 +27,10 @@ export async function POST(req: NextRequest) {
     const {
       pickup,
       dropoff,
+      pickupLat,
+      pickupLng,
+      dropoffLat,
+      dropoffLng,
       note,
       pickupContactName,
       pickupContactPhone,
@@ -34,6 +40,10 @@ export async function POST(req: NextRequest) {
     } = body as {
       pickup?: string;
       dropoff?: string;
+      pickupLat?: number;
+      pickupLng?: number;
+      dropoffLat?: number;
+      dropoffLng?: number;
       note?: string;
       pickupContactName?: string;
       pickupContactPhone?: string;
@@ -69,18 +79,48 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You already have an active request" }, { status: 409 });
     }
 
+    // Fare estimate at creation time, same approach as Hub checkout:
+    // pickup→dropoff distance only (no rider assigned yet, so the
+    // rider-to-pickup leg is 0). Only computed when both coordinate pairs
+    // are present — older callers or missing geocoding just skip pricing
+    // rather than failing the whole request.
+    let riderEarningKobo: number | null = null;
+    const hasCoords =
+      typeof pickupLat === "number" &&
+      typeof pickupLng === "number" &&
+      typeof dropoffLat === "number" &&
+      typeof dropoffLng === "number";
+
+    if (hasCoords) {
+      const km = haversineKm({ lat: pickupLat!, lng: pickupLng! }, { lat: dropoffLat!, lng: dropoffLng! });
+      const minutes = estimateMinutes(km, vehicleType);
+      const feeResult = calculateDeliveryFee({
+        vehicleType: vehicleType as VehicleType,
+        riderToPickupKm: 0,
+        riderToPickupMinutes: 0,
+        pickupToDropoffKm: km,
+        pickupToDropoffMinutes: minutes,
+      });
+      riderEarningKobo = Math.round(feeResult.riderEarning * 100);
+    }
+
     const request = await CourierRequest.create({
       clientUid: uid,
       clientName: client.name,
       clientPhone: client.phone,
       pickup,
       dropoff,
+      pickupLat: hasCoords ? pickupLat : null,
+      pickupLng: hasCoords ? pickupLng : null,
+      dropoffLat: hasCoords ? dropoffLat : null,
+      dropoffLng: hasCoords ? dropoffLng : null,
       note: note ?? "",
       pickupContactName: pickupContactName || client.name,
       pickupContactPhone: pickupContactPhone || client.phone,
       receiverName,
       receiverPhone,
       vehicleType,
+      riderEarningKobo,
       status: COURIER_STATUS.PENDING,
     });
 

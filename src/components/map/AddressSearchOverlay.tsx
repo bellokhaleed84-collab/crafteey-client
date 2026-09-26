@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Bike, Truck } from "lucide-react";
 import MapboxAddressInput, { type PlaceResult } from "@/components/map/MapboxAddressInput";
+import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
+import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
 
 export type VehicleType = "bicycle" | "motorcycle" | "cargo";
 
@@ -68,12 +70,40 @@ export default function AddressSearchOverlay({
   const [dropoffPlace, setDropoffPlace] = useState<PlaceResult | null>(null);
   const [note, setNote] = useState("");
   const [vehicleType, setVehicleType] = useState<VehicleType | null>(defaultVehicleType);
+  const [estimatedFee, setEstimatedFee] = useState<number | null>(null);
 
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
 
   const [pickupContactName, setPickupContactName] = useState("");
   const [pickupContactPhone, setPickupContactPhone] = useState("");
+
+  // Live fare estimate — recalculates whenever pickup, dropoff, or vehicle
+  // type changes. This excludes the rider-to-pickup leg (no rider is
+  // assigned yet at this point), same approach used for Hub checkout —
+  // so it's shown as an estimate, and the final fee firms up once a rider accepts.
+  useEffect(() => {
+    if (!pickupPlace || !dropoffPlace || !vehicleType) {
+      setEstimatedFee(null);
+      return;
+    }
+
+    const km = haversineKm(
+      { lat: pickupPlace.lat, lng: pickupPlace.lng },
+      { lat: dropoffPlace.lat, lng: dropoffPlace.lng }
+    );
+    const minutes = estimateMinutes(km, vehicleType);
+
+    const { deliveryFee } = calculateDeliveryFee({
+      vehicleType,
+      riderToPickupKm: 0,
+      riderToPickupMinutes: 0,
+      pickupToDropoffKm: km,
+      pickupToDropoffMinutes: minutes,
+    });
+
+    setEstimatedFee(deliveryFee);
+  }, [pickupPlace, dropoffPlace, vehicleType]);
 
   const canConfirm =
     !!pickupPlace &&
@@ -153,6 +183,24 @@ export default function AddressSearchOverlay({
           onChange={setDropoff}
           onSelect={setDropoffPlace}
         />
+
+        {/* Fare estimate — appears once pickup, dropoff, and vehicle are all set */}
+        {estimatedFee !== null && (
+          <div className="rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                Estimated fare
+              </span>
+              <span className="text-lg font-bold text-brand dark:text-white">
+                ₦{estimatedFee.toLocaleString()}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              Final price may vary slightly once a rider is matched
+            </p>
+          </div>
+        )}
+
         <div>
           <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
             Note (optional)

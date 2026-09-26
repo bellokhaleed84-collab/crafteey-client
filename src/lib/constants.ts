@@ -246,3 +246,9 @@ export const COURIER_STATUS = {
 } as const;
 
 export type CourierStatus = (typeof COURIER_STATUS)[keyof typeof COURIER_STATUS];
+
+// Vehicle types for courier/delivery requests — shared enum between
+// direct Rides bookings and Hub-order-triggered courier requests.
+export const VEHICLE_TYPES = ["bicycle", "motorcycle", "cargo"] as const;
+
+export type VehicleType = (typeof VEHICLE_TYPES)[number];

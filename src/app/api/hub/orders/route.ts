@@ -6,7 +6,7 @@ import HubOrder from "@/models/HubOrder";
 import HubProduct from "@/models/HubProduct";
 import HubVendor from "@/models/HubVendor";
 import { getClientByUid } from "@/lib/hub/getClient";
-import { newReference } from "@/lib/hub/orders";
+import { newReference, newOrderNumber } from "@/lib/hub/orders";
 import { initializeTransaction } from "@/lib/paystack";
 import { calculateVendorPayout } from "@/lib/pricing/vendorCommission";
 import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
@@ -86,9 +86,6 @@ export async function POST(req: NextRequest) {
 
     const subtotalKobo = orderItems.reduce((sum, it) => sum + it.unitPriceKobo * it.quantity, 0);
 
-    // Real distance-based delivery fee: vendor -> customer only (no rider
-    // assigned yet at checkout time, so the rider-to-pickup leg is 0 —
-    // matches how Chowdeck and similar apps price Hub-style orders).
     const km = haversineKm({ lat: vendor.lat, lng: vendor.lng }, { lat: deliveryLat, lng: deliveryLng });
     const minutes = estimateMinutes(km, vehicleType);
 
@@ -112,6 +109,7 @@ export async function POST(req: NextRequest) {
       firebaseUid: user.uid,
       vendorId: vendor._id,
       vendorName: vendor.name,
+      orderNumber: newOrderNumber(),
       items: orderItems,
       subtotalKobo,
       deliveryFeeKobo,
@@ -143,6 +141,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       orderId: String(order._id),
+      orderNumber: order.orderNumber,
       accessCode: init.access_code,
       authorizationUrl: init.authorization_url,
       reference,

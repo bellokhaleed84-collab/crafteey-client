@@ -7,6 +7,7 @@ export interface IHubOrder {
   firebaseUid: string;
   vendorId: Types.ObjectId;
   vendorName: string;
+  orderNumber: string;
   items: { productId: Types.ObjectId; name: string; imageUrl?: string; unitPriceKobo: number; quantity: number }[];
   subtotalKobo: number;
   deliveryFeeKobo: number;
@@ -32,6 +33,7 @@ const HubOrderSchema = new Schema<IHubOrder>(
     firebaseUid: { type: String, required: true, index: true },
     vendorId: { type: Schema.Types.ObjectId, ref: "HubVendor", required: true, index: true },
     vendorName: { type: String, required: true },
+    orderNumber: { type: String, required: true, unique: true, index: true },
     items: [
       {
         _id: false,
