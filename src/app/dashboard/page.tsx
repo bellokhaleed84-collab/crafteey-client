@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, MapPin, Search, UtensilsCrossed, Car, Wrench, Clock } from "lucide-react";
+import { Bell, MapPin, UtensilsCrossed, Car, Wrench, Clock, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useHubApi } from "@/lib/hub/useHubApi";
+import ActiveHubOrderBanner from "@/components/hub/ActiveHubOrderBanner";
+import { formatNaira, HUB_ORDER_STATUS_LABELS } from "@/lib/hub/config";
+import type { HubOrderDTO } from "@/lib/hub/types";
 
 const SERVICES = [
   {
@@ -46,9 +51,101 @@ function greeting() {
   return "Good evening";
 }
 
+interface CourierRequestSummary {
+  _id: string;
+  pickup: string;
+  dropoff: string;
+  status: string;
+  createdAt: string;
+}
+
+// Unified shape for rendering either a Hub order or a direct Rides
+// booking in the same "Recent activity" list.
+interface ActivityItem {
+  id: string;
+  href: string;
+  emoji: string;
+  title: string;
+  subtitle: string;
+  createdAt: string;
+}
+
+const HUB_EMOJI: Record<string, string> = {
+  pending_payment: "⏳",
+  paid: "✅",
+  preparing: "👨‍🍳",
+  out_for_delivery: "🛵",
+  delivered: "🎉",
+  cancelled: "❌",
+};
+
+function hubOrderToActivity(o: HubOrderDTO): ActivityItem {
+  return {
+    id: `hub-${o._id}`,
+    href: `/dashboard/hub/orders/${o._id}`,
+    emoji: HUB_EMOJI[o.status] ?? "🧾",
+    title: o.vendorName,
+    subtitle: `${HUB_ORDER_STATUS_LABELS[o.status]} • ${formatNaira(o.totalKobo)}`,
+    createdAt: o.createdAt,
+  };
+}
+
+function courierRequestToActivity(r: CourierRequestSummary): ActivityItem {
+  const statusLabel: Record<string, string> = {
+    pending: "Finding a courier",
+    accepted: "Courier on the way",
+    picked_up: "Picked up",
+    en_route: "In transit",
+    delivered: "Delivered",
+    cancelled: "Cancelled",
+  };
+  return {
+    id: `ride-${r._id}`,
+    href: r.status === "delivered" || r.status === "cancelled" ? "/dashboard/history" : "/dashboard/rider",
+    emoji: "🛵",
+    title: `${r.pickup} → ${r.dropoff}`,
+    subtitle: statusLabel[r.status] ?? r.status,
+    createdAt: r.createdAt,
+  };
+}
+
 export default function DashboardHomePage() {
   const { client } = useAuth();
+  const hubApi = useHubApi();
   const firstName = client?.name?.split(" ")[0] || "there";
+
+  const [activity, setActivity] = useState<ActivityItem[] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [hubData, rideData] = await Promise.allSettled([
+          hubApi<{ orders: HubOrderDTO[] }>("/api/hub/orders"),
+          hubApi<{ requests: CourierRequestSummary[] }>("/api/courier-requests"),
+        ]);
+
+        const items: ActivityItem[] = [];
+        if (hubData.status === "fulfilled") {
+          items.push(...hubData.value.orders.map(hubOrderToActivity));
+        }
+        if (rideData.status === "fulfilled") {
+          items.push(...rideData.value.requests.map(courierRequestToActivity));
+        }
+
+        items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        if (!cancelled) setActivity(items.slice(0, 3));
+      } catch {
+        if (!cancelled) setActivity([]);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [hubApi]);
 
   return (
     <div className="space-y-6">
@@ -80,15 +177,6 @@ export default function DashboardHomePage() {
         <p className="mt-1 text-sm font-medium text-brand/70">
           Everything you need, right at your fingertips.
         </p>
-
-        <div className="mt-4 flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-card">
-          <Search className="h-4 w-4 text-steel" />
-          <input
-            type="text"
-            placeholder="Search for food, rides, services…"
-            className="w-full bg-transparent text-sm text-brand outline-none placeholder:text-steel"
-          />
-        </div>
       </div>
 
       {/* Location selector — static for now, not wired to real geolocation/address picker yet */}
@@ -96,6 +184,9 @@ export default function DashboardHomePage() {
         <MapPin className="h-4 w-4 text-brand-accent" />
         Lagos, Nigeria
       </button>
+
+      {/* Active Hub order — shows only if the client has an order in progress */}
+      <ActiveHubOrderBanner />
 
       {/* Promo banner */}
       <div className="rounded-2xl bg-brand px-5 py-4 text-white shadow-card-lg">
@@ -126,7 +217,7 @@ export default function DashboardHomePage() {
         </div>
       </div>
 
-      {/* Recent activity — placeholder until this pulls from real combined history */}
+      {/* Recent activity — now wired to real Hub orders + Rides bookings */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-bold text-brand">Recent activity</p>
@@ -134,9 +225,37 @@ export default function DashboardHomePage() {
             See all
           </Link>
         </div>
-        <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
-          <p className="text-sm text-steel">Your recent orders and bookings will show up here.</p>
-        </div>
+
+        {activity === null ? (
+          <div className="space-y-2">
+            {[0, 1].map((i) => (
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-white shadow-card" />
+            ))}
+          </div>
+        ) : activity.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
+            <p className="text-sm text-steel">Your recent orders and bookings will show up here.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {activity.map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card transition hover:shadow-card-lg"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-xl">
+                  {item.emoji}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-brand">{item.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-steel">{item.subtitle}</p>
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-steel" />
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
