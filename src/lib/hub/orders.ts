@@ -38,7 +38,11 @@ async function onOrderPaid(order: IHubOrder) {
     await CourierRequest.create({
       clientUid: order.firebaseUid,
       clientName: order.vendorName,
-      clientPhone: "",
+      // CourierRequest.clientPhone is required and non-empty — an empty
+      // string fails Mongoose's required check the same as null/undefined,
+      // which was silently killing courier-request creation for every Hub
+      // order. Fall back to the delivery phone, which always exists.
+      clientPhone: order.delivery.phone || "N/A",
 
       pickup: vendor.address || order.vendorName,
       dropoff: order.delivery.address,
