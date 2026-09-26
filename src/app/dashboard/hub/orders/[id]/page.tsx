@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Phone } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import { usePaystackPopup } from "@/lib/hub/usePaystackPopup";
 import { formatNaira, type HubOrderStatus } from "@/lib/hub/config";
 import type { HubOrderDTO } from "@/lib/hub/types";
+import RouteMap, { type LatLng } from "@/components/map/RouteMap";
 
 const STEPS: { key: HubOrderStatus; label: string }[] = [
   { key: "paid", label: "Order placed" },
@@ -26,19 +28,44 @@ const HERO: Record<HubOrderStatus, { emoji: string; title: string; text: string 
   cancelled: { emoji: "❌", title: "Cancelled", text: "This order was cancelled." },
 };
 
+const VEHICLE_LABEL: Record<string, string> = {
+  bicycle: "Bicycle",
+  motorcycle: "Motorcycle",
+  cargo: "Cargo",
+};
+
+const COURIER_STATUS_TEXT: Record<string, string> = {
+  accepted: "Heading to the vendor",
+  picked_up: "Picked up your order",
+  en_route: "On the way to you",
+  delivered: "Delivered",
+};
+
+const RIDER_APP_URL = process.env.NEXT_PUBLIC_RIDER_APP_URL ?? "";
+
+interface LiveLocation {
+  lat: number;
+  lng: number;
+  live: boolean;
+}
+
 export default function OrderPage() {
   const { id } = useParams<{ id: string }>();
   const reference = useSearchParams().get("reference");
   const router = useRouter();
   const api = useHubApi();
+  const { getIdToken } = useAuth();
   const openPaystack = usePaystackPopup();
   const { clear } = useCart();
 
   const [order, setOrder] = useState<HubOrderDTO | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(Boolean(reference));
-  const [paying, setPaying] = useState(false);
-  const started = useRef(false);
+  const [confirming, setConfirming] = useState<boolean>(Boolean(reference));
+  const [paying, setPaying] = useState<boolean>(false);
+  const started = useRef<boolean>(false);
+
+  const [liveLocation, setLiveLocation] = useState<LiveLocation | null>(null);
+  const locationPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchOrder = useCallback(async () => {
     try {
@@ -50,7 +77,6 @@ export default function OrderPage() {
     }
   }, [api, id]);
 
-  /** Ask the server to check the payment with Paystack, then refresh the order. */
   const confirmPayment = useCallback(
     async (ref: string) => {
       setConfirming(true);
@@ -76,12 +102,55 @@ export default function OrderPage() {
     }
   }, [reference, id, confirmPayment, fetchOrder, router]);
 
-  // keep fresh while the order is in progress
   useEffect(() => {
     if (!order || order.status === "delivered" || order.status === "cancelled") return;
     const t = setInterval(fetchOrder, 20000);
     return () => clearInterval(t);
   }, [order, fetchOrder]);
+
+  // Live rider location — same pattern as the direct-booking tracking
+  // screen in crafteey-rider's client-side counterpart (RiderPage.tsx),
+  // polling crafteey-rider's cross-origin location endpoint directly.
+  const fetchLiveLocation = useCallback(
+    async (requestId: string) => {
+      if (!RIDER_APP_URL) return;
+      try {
+        const token = await getIdToken();
+        if (!token) return;
+        const res = await fetch(`${RIDER_APP_URL}/api/courier-requests/${requestId}/location`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (typeof data.lat === "number" && typeof data.lng === "number") {
+          setLiveLocation({ lat: data.lat, lng: data.lng, live: Boolean(data.live) });
+        }
+      } catch {
+        // a missed poll just means the map keeps showing the last position
+      }
+    },
+    [getIdToken]
+  );
+
+  const courierRequestId: string | undefined = order?.courier?.requestId;
+  const courierStatus: string | undefined = order?.courier?.status;
+  const isCourierTrackable: boolean = Boolean(courierRequestId) && courierStatus !== "delivered";
+
+  useEffect(() => {
+    if (locationPollRef.current) {
+      clearInterval(locationPollRef.current);
+      locationPollRef.current = null;
+    }
+    if (courierRequestId && isCourierTrackable) {
+      fetchLiveLocation(courierRequestId);
+      locationPollRef.current = setInterval(() => fetchLiveLocation(courierRequestId), 6000);
+    } else {
+      setLiveLocation(null);
+    }
+    return () => {
+      if (locationPollRef.current) clearInterval(locationPollRef.current);
+    };
+  }, [courierRequestId, isCourierTrackable, fetchLiveLocation]);
 
   async function payNow() {
     setPaying(true);
@@ -89,12 +158,12 @@ export default function OrderPage() {
     try {
       const r = await api<{ accessCode: string }>(`/api/hub/orders/${id}/pay`, { method: "POST" });
       await openPaystack(r.accessCode, {
-        onSuccess: (ref) => {
+        onSuccess: (ref: string) => {
           setPaying(false);
           confirmPayment(ref);
         },
         onCancel: () => setPaying(false),
-        onError: (m) => {
+        onError: (m: string) => {
           setPaying(false);
           setError(m);
         },
@@ -107,6 +176,24 @@ export default function OrderPage() {
 
   const stepIndex = order ? STEPS.findIndex((s) => s.key === order.status) : -1;
   const hero = order ? HERO[order.status] : null;
+
+  const courier = order?.courier ?? null;
+
+  const pickupCoords: LatLng | null =
+    courier && typeof courier.pickupLat === "number" && typeof courier.pickupLng === "number"
+      ? { lat: courier.pickupLat, lng: courier.pickupLng }
+      : null;
+
+  const dropoffCoords: LatLng | null =
+    courier && typeof courier.dropoffLat === "number" && typeof courier.dropoffLng === "number"
+      ? { lat: courier.dropoffLat, lng: courier.dropoffLng }
+      : null;
+
+  const courierMapLocation: LatLng | null = liveLocation
+    ? { lat: liveLocation.lat, lng: liveLocation.lng }
+    : courier?.location ?? null;
+
+  const hasMapData: boolean = Boolean(pickupCoords || dropoffCoords || courierMapLocation);
 
   return (
     <div className="space-y-6">
@@ -131,11 +218,14 @@ export default function OrderPage() {
         <>
           <div className="flex items-center justify-between rounded-2xl bg-sunshine p-5">
             <div>
-              <p className="text-base font-extrabold text-brand">{hero!.title}</p>
-              <p className="mt-1 text-xs font-medium text-brand/70">{hero!.text}</p>
+              <p className="text-base font-extrabold text-brand">{hero ? hero.title : ""}</p>
+              <p className="mt-1 text-xs font-medium text-brand/70">{hero ? hero.text : ""}</p>
+              {order.orderNumber && (
+                <p className="mt-1 text-xs font-semibold text-brand/60">Order #{order.orderNumber}</p>
+              )}
             </div>
             <span className="text-4xl" aria-hidden>
-              {hero!.emoji}
+              {hero ? hero.emoji : ""}
             </span>
           </div>
 
@@ -169,6 +259,55 @@ export default function OrderPage() {
                 );
               })}
             </ol>
+          )}
+
+          {courier && (
+            <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
+              <div className="flex items-center gap-3">
+                {courier.name ? (
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sunshine text-base font-extrabold text-brand">
+                    {courier.name.charAt(0).toUpperCase()}
+                  </span>
+                ) : (
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg">
+                    🛵
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-brand">{courier.name || "Rider assigned"}</p>
+                  <p className="text-xs text-steel">
+                    {COURIER_STATUS_TEXT[courier.status] ?? "On the way"}
+                    {courier.vehicleType ? ` • ${VEHICLE_LABEL[courier.vehicleType] ?? courier.vehicleType}` : ""}
+                  </p>
+                </div>
+                {courier.phone && (
+                  <a
+                    href={`tel:${courier.phone}`}
+                    aria-label={`Call ${courier.name || "your rider"}`}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-accent/10 text-brand-accent transition hover:bg-brand-accent/20"
+                  >
+                    <Phone className="h-4 w-4" />
+                  </a>
+                )}
+              </div>
+
+              {hasMapData && (
+                <div className="relative">
+                  <RouteMap
+                    pickup={pickupCoords}
+                    dropoff={dropoffCoords}
+                    courierLocation={courierMapLocation}
+                    className="h-[220px] w-full rounded-xl border border-slate-100"
+                  />
+                  {liveLocation?.live && (
+                    <span className="absolute right-2 top-2 inline-flex items-center gap-1.5 rounded-full bg-brand px-2 py-1 text-[10px] font-bold text-white shadow">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                      Live
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
           <div className="space-y-2 rounded-2xl bg-white p-4 shadow-card">

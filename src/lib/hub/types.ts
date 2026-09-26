@@ -30,10 +30,24 @@ export interface HubProduct {
   vendor: { _id: string; name: string; logoUrl?: string; isOpen: boolean };
 }
 
+export interface HubOrderCourierDTO {
+  requestId: string;
+  status: string;
+  name: string | null;
+  phone: string | null;
+  vehicleType: string;
+  location: { lat: number; lng: number } | null;
+  pickupLat: number | null;
+  pickupLng: number | null;
+  dropoffLat: number | null;
+  dropoffLng: number | null;
+}
+
 export interface HubOrderDTO {
   _id: string;
   vendorId: string;
   vendorName: string;
+  orderNumber?: string;
   items: { productId: string; name: string; imageUrl?: string; unitPriceKobo: number; quantity: number }[];
   subtotalKobo: number;
   deliveryFeeKobo: number;
@@ -42,4 +56,5 @@ export interface HubOrderDTO {
   payment: { reference?: string; status: "pending" | "success" | "failed"; paidAt?: string; channel?: string };
   delivery: { address: string; phone?: string; note?: string };
   createdAt: string;
+  courier?: HubOrderCourierDTO | null;
 }
