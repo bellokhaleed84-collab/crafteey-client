@@ -3,6 +3,7 @@ import { HUB_CATEGORIES, type HubCategory } from "../lib/hub/config";
 import { type VendorTier } from "../lib/pricing/vendorCommission";
 
 export interface IHubVendor {
+  ownerUid?: string; // Firebase uid of the vendor-app owner, once claimed
   name: string;
   categories: HubCategory[];
   description?: string;
@@ -25,6 +26,7 @@ export interface IHubVendor {
 
 const HubVendorSchema = new Schema<IHubVendor>(
   {
+    ownerUid: { type: String, index: true, sparse: true, unique: true },
     name: { type: String, required: true, trim: true },
     categories: { type: [{ type: String, enum: HUB_CATEGORIES }], default: [], index: true },
     description: String,
