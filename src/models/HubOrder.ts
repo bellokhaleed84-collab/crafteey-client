@@ -23,6 +23,13 @@ export interface IHubOrder {
   status: HubOrderStatus;
   payment: { reference?: string; status: "pending" | "success" | "failed"; paidAt?: Date; channel?: string };
   delivery: { address: string; phone?: string; note?: string };
+  // Written by the vendor app:
+  vendorAcceptedAt?: Date;
+  readyForPickupAt?: Date;
+  cancelledBy?: "vendor";
+  cancelReason?: string;
+  // Set when a cancelled, paid order has been refunded to the customer's wallet.
+  refund?: { status: "refunded"; method: "wallet"; amountKobo: number; refundedAt: Date };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +73,16 @@ const HubOrderSchema = new Schema<IHubOrder>(
       address: { type: String, required: true },
       phone: String,
       note: String,
+    },
+    vendorAcceptedAt: Date,
+    readyForPickupAt: Date,
+    cancelledBy: { type: String, enum: ["vendor"] },
+    cancelReason: String,
+    refund: {
+      status: { type: String, enum: ["refunded"] },
+      method: { type: String, enum: ["wallet"] },
+      amountKobo: Number,
+      refundedAt: Date,
     },
   },
   { timestamps: true }

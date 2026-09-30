@@ -19,7 +19,33 @@ function generatePickupCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
-async function onOrderPaid(order: IHubOrder) {
+/**
+ * Why an unpaid order can't be paid right now (store closed, item gone or
+ * unavailable, not enough stock), or null if it's fine. Used before taking payment.
+ */
+export async function orderBlocker(order: IHubOrder): Promise<string | null> {
+  const vendor = await HubVendor.findOne({ _id: order.vendorId, isActive: true }).select("isOpen").lean();
+  if (!vendor) return "This vendor is no longer available";
+  if (!vendor.isOpen) return "This vendor is currently closed";
+
+  const products = await HubProduct.find({
+    _id: { $in: order.items.map((i) => i.productId) },
+    isActive: true,
+  })
+    .select("name isAvailable stock")
+    .lean();
+  const byId = new Map(products.map((p) => [String(p._id), p]));
+
+  for (const it of order.items) {
+    const p = byId.get(String(it.productId));
+    if (!p) return `${it.name} is no longer available`;
+    if (!p.isAvailable) return `${p.name} is currently unavailable`;
+    if (typeof p.stock === "number" && p.stock < it.quantity) return `Only ${p.stock} left of ${p.name}`;
+  }
+  return null;
+}
+
+export async function onOrderPaid(order: IHubOrder) {
   try {
     await Promise.all(
       order.items.map((it) =>

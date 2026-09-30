@@ -4,7 +4,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { verifyToken } from "@/middleware/auth";
 import HubOrder from "@/models/HubOrder";
 import { getClientByUid } from "@/lib/hub/getClient";
-import { newReference } from "@/lib/hub/orders";
+import { newReference, orderBlocker } from "@/lib/hub/orders";
 import { initializeTransaction } from "@/lib/paystack";
 import { fail, handleError } from "@/lib/hub/http";
 
@@ -21,6 +21,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (order.status !== "pending_payment" || order.payment.status === "success") {
       return fail("This order doesn't need payment", 409);
     }
+
+    const blocker = await orderBlocker(order);
+    if (blocker) return fail(blocker, 409);
 
     const client = await getClientByUid(user.uid);
     const reference = newReference(String(order._id));

@@ -15,6 +15,7 @@ import { MotorcycleIcon } from "@/components/map/AddressSearchOverlay"; // adjus
 
 type Stage = "idle" | "creating" | "paying";
 type VehicleType = "bicycle" | "motorcycle";
+type PayMethod = "paystack" | "wallet";
 
 const input =
   "w-full rounded-xl bg-surface-muted px-4 py-3 text-sm text-brand outline-none placeholder:text-steel";
@@ -23,6 +24,13 @@ const VEHICLE_OPTIONS: { key: VehicleType; label: string }[] = [
   { key: "bicycle", label: "Bicycle" },
   { key: "motorcycle", label: "Motorcycle" },
 ];
+
+const methodClass = (selected: boolean) =>
+  `flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left text-xs font-semibold transition ${
+    selected
+      ? "border-brand-accent bg-brand-accent/10 text-brand-accent"
+      : "border-slate-200 text-slate-500 hover:border-slate-300"
+  }`;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -37,6 +45,8 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
   const [vehicleType, setVehicleType] = useState<VehicleType | null>(null);
+  const [payMethod, setPayMethod] = useState<PayMethod>("paystack");
+  const [walletBalanceKobo, setWalletBalanceKobo] = useState<number | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -54,6 +64,21 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (hydrated && items.length === 0 && !done) router.replace("/dashboard/hub/cart");
   }, [hydrated, items.length, done, router]);
+
+  // Wallet balance, so the wallet option can say whether it covers the order.
+  useEffect(() => {
+    let cancelled = false;
+    api<{ balanceKobo: number }>("/api/hub/wallet")
+      .then((r) => {
+        if (!cancelled) setWalletBalanceKobo(r.balanceKobo);
+      })
+      .catch(() => {
+        if (!cancelled) setWalletBalanceKobo(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
 
   // Debounced live preview — refetches whenever vehicle or address changes
   useEffect(() => {
@@ -118,12 +143,15 @@ export default function CheckoutPage() {
       });
 
       let orderId: string;
-      let accessCode: string;
+      let accessCode: string | null = null;
 
       if (pending && pending.sig === sig) {
-        const r = await api<{ accessCode: string }>(`/api/hub/orders/${pending.orderId}/pay`, { method: "POST" });
+        // Retrying an order that was already created: reuse it.
         orderId = pending.orderId;
-        accessCode = r.accessCode;
+        if (payMethod === "paystack") {
+          const r = await api<{ accessCode: string }>(`/api/hub/orders/${orderId}/pay`, { method: "POST" });
+          accessCode = r.accessCode;
+        }
       } else {
         const r = await api<{ orderId: string; accessCode: string }>("/api/hub/orders", {
           method: "POST",
@@ -141,7 +169,16 @@ export default function CheckoutPage() {
       }
 
       setStage("paying");
-      await openPaystack(accessCode, {
+
+      if (payMethod === "wallet") {
+        await api(`/api/hub/orders/${orderId}/pay-wallet`, { method: "POST" });
+        setDone(true);
+        clear();
+        router.push(`/dashboard/hub/orders/${orderId}`);
+        return;
+      }
+
+      await openPaystack(accessCode as string, {
         onSuccess: (reference) => {
           setDone(true);
           clear();
@@ -159,15 +196,20 @@ export default function CheckoutPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start payment");
       setStage("idle");
-      // The server may have rejected the order because the store just closed
-      // or an item changed, so refresh what the page shows.
+      // The server may have rejected the order because the store just closed,
+      // an item changed, or the wallet balance changed, so refresh what we show.
       void check.refresh();
+      api<{ balanceKobo: number }>("/api/hub/wallet")
+        .then((r) => setWalletBalanceKobo(r.balanceKobo))
+        .catch(() => {});
     }
   }
 
   const busy = stage !== "idle";
   const blocked = check.hasBlockingIssue;
   const totalKobo = fee ? check.liveSubtotalKobo + fee.deliveryFeeKobo : check.liveSubtotalKobo;
+  const walletShort =
+    payMethod === "wallet" && fee !== null && walletBalanceKobo !== null && walletBalanceKobo < totalKobo;
 
   return (
     <form onSubmit={pay} className="space-y-6">
@@ -306,16 +348,36 @@ export default function CheckoutPage() {
       {/* payment */}
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
         <p className="text-sm font-bold text-brand">💳 Payment</p>
-        <p className="text-xs text-steel">
-          Pay right here without leaving the app. Pick your method after tapping Pay.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {["💳 Card", "🏦 Bank transfer", "📲 USSD"].map((m) => (
-            <span key={m} className="rounded-xl bg-surface-muted px-3 py-1.5 text-xs font-semibold text-brand">
-              {m}
+
+        <div className="space-y-2">
+          <button type="button" onClick={() => setPayMethod("paystack")} className={methodClass(payMethod === "paystack")}>
+            <span>Card, bank transfer or USSD</span>
+            <span className="text-[11px] font-medium">Paystack</span>
+          </button>
+          <button type="button" onClick={() => setPayMethod("wallet")} className={methodClass(payMethod === "wallet")}>
+            <span>👛 Crafteey wallet</span>
+            <span className="text-[11px] font-medium">
+              {walletBalanceKobo === null ? "…" : formatNaira(walletBalanceKobo)}
             </span>
-          ))}
+          </button>
         </div>
+
+        {payMethod === "wallet" && walletShort && (
+          <p className="text-xs text-red-600">
+            Your wallet balance is lower than the total.{" "}
+            <Link href="/dashboard/hub/wallet" className="font-bold underline">
+              Top up
+            </Link>
+          </p>
+        )}
+        {payMethod === "wallet" && !fee && (
+          <p className="text-xs text-steel">Choose a vehicle and address to see if your balance covers this order.</p>
+        )}
+        {payMethod === "paystack" && (
+          <p className="text-xs text-steel">
+            Pay right here without leaving the app. Pick your method after tapping Pay.
+          </p>
+        )}
         <p className="text-[11px] text-steel">🔒 Secured by Paystack</p>
       </div>
 
@@ -324,7 +386,7 @@ export default function CheckoutPage() {
       <div className="sticky bottom-20 z-20">
         <button
           type="submit"
-          disabled={busy || items.length === 0 || blocked}
+          disabled={busy || items.length === 0 || blocked || walletShort}
           className="flex w-full items-center justify-between rounded-2xl bg-sunshine px-5 py-3.5 text-brand shadow-card disabled:opacity-60"
         >
           <span className="text-sm font-extrabold">
@@ -336,6 +398,10 @@ export default function CheckoutPage() {
               ? "Store is closed"
               : blocked
               ? "Fix your cart to continue"
+              : walletShort
+              ? "Not enough wallet balance"
+              : payMethod === "wallet"
+              ? "Pay with wallet"
               : "Pay now"}
           </span>
           {fee && !blocked && <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>}
