@@ -7,6 +7,7 @@ import { ArrowLeft, Bike } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
+import { useCartCheck } from "@/lib/hub/useCartCheck";
 import { usePaystackPopup } from "@/lib/hub/usePaystackPopup";
 import { formatNaira } from "@/lib/hub/config";
 import MapboxAddressInput, { type PlaceResult } from "@/components/map/MapboxAddressInput";
@@ -26,7 +27,8 @@ const VEHICLE_OPTIONS: { key: VehicleType; label: string }[] = [
 export default function CheckoutPage() {
   const router = useRouter();
   const { client } = useAuth();
-  const { items, hydrated, vendorId, vendorName, subtotalKobo, clear } = useCart();
+  const { items, hydrated, vendorId, vendorName, removeItem, clear } = useCart();
+  const check = useCartCheck();
   const api = useHubApi();
   const openPaystack = usePaystackPopup();
 
@@ -88,11 +90,17 @@ export default function CheckoutPage() {
     if (deliveryPlace && text !== deliveryPlace.address) setDeliveryPlace(null);
   }
 
+  function removeUnavailable() {
+    check.removableIds.forEach((id) => removeItem(id));
+  }
+
   async function pay(e: React.FormEvent) {
     e.preventDefault();
     if (stage !== "idle") return;
     setError(null);
 
+    if (check.storeClosed) return setError(`${vendorName ?? "This store"} is closed right now.`);
+    if (check.hasBlockingIssue) return setError("Some items in your cart can't be ordered right now.");
     if (!vehicleType) return setError("Please choose a delivery vehicle");
     if (!deliveryPlace) return setError("Please select your delivery address from the suggestions list");
 
@@ -151,11 +159,15 @@ export default function CheckoutPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not start payment");
       setStage("idle");
+      // The server may have rejected the order because the store just closed
+      // or an item changed, so refresh what the page shows.
+      void check.refresh();
     }
   }
 
   const busy = stage !== "idle";
-  const totalKobo = fee ? subtotalKobo + fee.deliveryFeeKobo : subtotalKobo;
+  const blocked = check.hasBlockingIssue;
+  const totalKobo = fee ? check.liveSubtotalKobo + fee.deliveryFeeKobo : check.liveSubtotalKobo;
 
   return (
     <form onSubmit={pay} className="space-y-6">
@@ -165,6 +177,32 @@ export default function CheckoutPage() {
         </Link>
         <h1 className="text-lg font-bold text-brand">Checkout</h1>
       </div>
+
+      {check.storeClosed && (
+        <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+          <p className="font-bold">{vendorName} is closed right now</p>
+          <p className="mt-0.5 text-xs">You can order when the store reopens. Your cart is saved.</p>
+        </div>
+      )}
+
+      {check.anyPriceChanged && (
+        <div className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-800">
+          Some prices have changed since you added them. The prices below are the current ones.
+        </div>
+      )}
+
+      {check.removableIds.length > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-red-50 p-3 text-xs text-red-700">
+          <span>Some items can&apos;t be ordered right now.</span>
+          <button
+            type="button"
+            onClick={removeUnavailable}
+            className="shrink-0 rounded-lg bg-white px-3 py-1.5 font-bold text-red-700"
+          >
+            Remove them
+          </button>
+        </div>
+      )}
 
       {/* vehicle type */}
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
@@ -225,18 +263,25 @@ export default function CheckoutPage() {
           <p className="text-sm font-bold text-brand">🧾 Your order</p>
           <span className="text-xs text-steel">{vendorName}</span>
         </div>
-        {items.map((i) => (
-          <div key={i.productId} className="flex items-center justify-between gap-3 text-sm">
-            <span className="min-w-0 truncate text-brand">
-              {i.quantity} × {i.name}
-            </span>
-            <span className="shrink-0 font-semibold text-brand">{formatNaira(i.priceKobo * i.quantity)}</span>
-          </div>
-        ))}
+        {items.map((i) => {
+          const live = check.byProduct[i.productId];
+          const price = live?.livePriceKobo ?? i.priceKobo;
+          return (
+            <div key={i.productId}>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <span className="min-w-0 truncate text-brand">
+                  {i.quantity} × {i.name}
+                </span>
+                <span className="shrink-0 font-semibold text-brand">{formatNaira(price * i.quantity)}</span>
+              </div>
+              {live?.issue && <p className="text-xs font-semibold text-red-600">{live.issue}</p>}
+            </div>
+          );
+        })}
         <div className="space-y-1.5 border-t border-slate-100 pt-2 text-sm">
           <div className="flex justify-between text-steel">
             <span>Subtotal</span>
-            <span className="font-semibold text-brand">{formatNaira(subtotalKobo)}</span>
+            <span className="font-semibold text-brand">{formatNaira(check.liveSubtotalKobo)}</span>
           </div>
           <div className="flex justify-between text-steel">
             <span>Delivery fee {fee && `(${fee.distanceKm}km)`}</span>
@@ -279,13 +324,21 @@ export default function CheckoutPage() {
       <div className="sticky bottom-20 z-20">
         <button
           type="submit"
-          disabled={busy || items.length === 0}
+          disabled={busy || items.length === 0 || blocked}
           className="flex w-full items-center justify-between rounded-2xl bg-sunshine px-5 py-3.5 text-brand shadow-card disabled:opacity-60"
         >
           <span className="text-sm font-extrabold">
-            {stage === "creating" ? "Preparing payment…" : stage === "paying" ? "Waiting for payment…" : "Pay now"}
+            {stage === "creating"
+              ? "Preparing payment…"
+              : stage === "paying"
+              ? "Waiting for payment…"
+              : check.storeClosed
+              ? "Store is closed"
+              : blocked
+              ? "Fix your cart to continue"
+              : "Pay now"}
           </span>
-          {fee && <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>}
+          {fee && !blocked && <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>}
         </button>
       </div>
     </form>

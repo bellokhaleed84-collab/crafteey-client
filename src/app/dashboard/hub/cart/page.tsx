@@ -3,11 +3,16 @@
 import Link from "next/link";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
+import { useCartCheck } from "@/lib/hub/useCartCheck";
 import { formatNaira } from "@/lib/hub/config";
 
 export default function CartPage() {
-  const { items, hydrated, vendorName, subtotalKobo, deliveryFeeKobo, totalKobo, setQuantity, removeItem, clear } =
-    useCart();
+  const { items, hydrated, vendorName, setQuantity, removeItem, clear } = useCart();
+  const check = useCartCheck();
+
+  function removeUnavailable() {
+    check.removableIds.forEach((id) => removeItem(id));
+  }
 
   return (
     <div className="space-y-6">
@@ -44,75 +49,123 @@ export default function CartPage() {
             <p className="text-base font-extrabold text-brand">{vendorName}</p>
           </div>
 
+          {check.storeClosed && (
+            <div className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+              <p className="font-bold">{vendorName} is closed right now</p>
+              <p className="mt-0.5 text-xs">Your cart is saved. You can order when the store reopens.</p>
+            </div>
+          )}
+
+          {check.anyPriceChanged && (
+            <div className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-800">
+              Some prices have changed since you added them. The prices below are the current ones.
+            </div>
+          )}
+
+          {check.removableIds.length > 0 && (
+            <div className="flex items-center justify-between gap-3 rounded-2xl bg-red-50 p-3 text-xs text-red-700">
+              <span>Some items can&apos;t be ordered right now.</span>
+              <button
+                type="button"
+                onClick={removeUnavailable}
+                className="shrink-0 rounded-lg bg-white px-3 py-1.5 font-bold text-red-700"
+              >
+                Remove them
+              </button>
+            </div>
+          )}
+
           <div className="space-y-3">
-            {items.map((i) => (
-              <div key={i.productId} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card">
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-2xl">
-                  {i.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={i.imageUrl} alt={i.name} className="h-full w-full object-cover" />
-                  ) : (
-                    (i.emoji ?? "🛍️")
-                  )}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-brand">{i.name}</p>
-                  <p className="text-xs font-bold text-brand-accent">{formatNaira(i.priceKobo * i.quantity)}</p>
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(i.productId, i.quantity - 1)}
-                      aria-label="Decrease quantity"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-brand"
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </button>
-                    <span className="w-5 text-center text-xs font-bold text-brand">{i.quantity}</span>
-                    <button
-                      type="button"
-                      onClick={() => setQuantity(i.productId, i.quantity + 1)}
-                      aria-label="Increase quantity"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-sunshine text-brand"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeItem(i.productId)}
-                  aria-label={`Remove ${i.name}`}
-                  className="self-start p-1 text-red-400"
+            {items.map((i) => {
+              const live = check.byProduct[i.productId];
+              const price = live?.livePriceKobo ?? i.priceKobo;
+              return (
+                <div
+                  key={i.productId}
+                  className={`flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card ${
+                    live?.issue ? "opacity-70" : ""
+                  }`}
                 >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
+                  <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-2xl">
+                    {i.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={i.imageUrl} alt={i.name} className="h-full w-full object-cover" />
+                    ) : (
+                      (i.emoji ?? "🛍️")
+                    )}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-brand">{i.name}</p>
+                    <p className="text-xs font-bold text-brand-accent">
+                      {formatNaira(price * i.quantity)}
+                      {live?.priceChanged && (
+                        <span className="ml-1.5 font-medium text-amber-700">(price updated)</span>
+                      )}
+                    </p>
+                    {live?.issue && <p className="text-xs font-semibold text-red-600">{live.issue}</p>}
+                    <div className="mt-1.5 flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(i.productId, i.quantity - 1)}
+                        aria-label="Decrease quantity"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-brand"
+                      >
+                        <Minus className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="w-5 text-center text-xs font-bold text-brand">{i.quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(i.productId, i.quantity + 1)}
+                        aria-label="Increase quantity"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-sunshine text-brand"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeItem(i.productId)}
+                    aria-label={`Remove ${i.name}`}
+                    className="self-start p-1 text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           <div className="space-y-2 rounded-2xl bg-white p-4 text-sm shadow-card">
             <div className="flex justify-between text-steel">
               <span>Subtotal</span>
-              <span className="font-semibold text-brand">{formatNaira(subtotalKobo)}</span>
+              <span className="font-semibold text-brand">{formatNaira(check.liveSubtotalKobo)}</span>
             </div>
             <div className="flex justify-between text-steel">
               <span>Delivery fee</span>
-              <span className="font-semibold text-brand">{formatNaira(deliveryFeeKobo)}</span>
-            </div>
-            <div className="flex justify-between border-t border-slate-100 pt-2 font-bold text-brand">
-              <span>Total</span>
-              <span>{formatNaira(totalKobo)}</span>
+              <span className="text-xs font-semibold text-brand">Calculated at checkout</span>
             </div>
           </div>
 
           <div className="sticky bottom-20 z-20">
-            <Link
-              href="/dashboard/hub/checkout"
-              className="flex items-center justify-between rounded-2xl bg-sunshine px-5 py-3.5 text-brand shadow-card"
-            >
-              <span className="text-sm font-extrabold">Go to checkout</span>
-              <span className="text-sm font-extrabold">{formatNaira(totalKobo)}</span>
-            </Link>
+            {check.hasBlockingIssue ? (
+              <div
+                aria-disabled="true"
+                className="flex items-center justify-between rounded-2xl bg-slate-200 px-5 py-3.5 text-steel"
+              >
+                <span className="text-sm font-extrabold">
+                  {check.storeClosed ? "Store is closed" : "Fix your cart to continue"}
+                </span>
+              </div>
+            ) : (
+              <Link
+                href="/dashboard/hub/checkout"
+                className="flex items-center justify-between rounded-2xl bg-sunshine px-5 py-3.5 text-brand shadow-card"
+              >
+                <span className="text-sm font-extrabold">Go to checkout</span>
+                <span className="text-sm font-extrabold">{formatNaira(check.liveSubtotalKobo)}</span>
+              </Link>
+            )}
           </div>
 
           <button type="button" onClick={clear} className="w-full text-center text-xs font-semibold text-steel underline">
