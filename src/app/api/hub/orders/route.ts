@@ -15,6 +15,10 @@ import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
 
+// Same limit as the cart's MAX_QTY.
+const MAX_QTY = 50;
+const MAX_LINES = 50;
+
 type RequestedItem = { productId: string; quantity: number };
 
 export async function POST(req: NextRequest) {
@@ -23,7 +27,7 @@ export async function POST(req: NextRequest) {
     await connectToDatabase();
 
     const body = await req.json().catch(() => null);
-    const items: RequestedItem[] = Array.isArray(body?.items) ? body.items : [];
+    const rawItems: unknown[] = Array.isArray(body?.items) ? body.items : [];
     const delivery = body?.delivery ?? {};
     const address = String(delivery.address || "").trim();
     const phone = delivery.phone ? String(delivery.phone).trim() : undefined;
@@ -33,7 +37,7 @@ export async function POST(req: NextRequest) {
     const deliveryLat = Number(body?.deliveryLat);
     const deliveryLng = Number(body?.deliveryLng);
 
-    if (items.length === 0) return fail("Your cart is empty");
+    if (rawItems.length === 0) return fail("Your cart is empty");
     if (!address) return fail("Delivery address is required");
     if (vehicleType !== "bicycle" && vehicleType !== "motorcycle") {
       return fail("Please choose a delivery vehicle");
@@ -41,23 +45,40 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(deliveryLat) || !Number.isFinite(deliveryLng)) {
       return fail("Please select a delivery address from the suggestions list");
     }
-    for (const it of items) {
-      if (!mongoose.isValidObjectId(it.productId)) return fail("Invalid item in cart");
-      if (!Number.isInteger(it.quantity) || it.quantity < 1) return fail("Invalid quantity");
+
+    // Validate every line, and merge duplicates so stock is checked against
+    // the real total for each product.
+    const merged = new Map<string, number>();
+    for (const raw of rawItems) {
+      const it = raw as Partial<RequestedItem> | null;
+      if (!it || typeof it.productId !== "string" || !mongoose.isValidObjectId(it.productId)) {
+        return fail("Invalid item in cart");
+      }
+      if (typeof it.quantity !== "number" || !Number.isInteger(it.quantity) || it.quantity < 1) {
+        return fail("Invalid quantity");
+      }
+      merged.set(it.productId, (merged.get(it.productId) ?? 0) + it.quantity);
+    }
+    const lines: RequestedItem[] = Array.from(merged, ([productId, quantity]) => ({
+      productId,
+      quantity,
+    }));
+    if (lines.length > MAX_LINES || lines.some((l) => l.quantity > MAX_QTY)) {
+      return fail(`You can order up to ${MAX_QTY} of each item`);
     }
 
     const client = await getClientByUid(user.uid);
     if (!client) return fail("Client account not found", 404);
 
-    const productIds = items.map((i) => i.productId);
+    const productIds = lines.map((l) => l.productId);
     const products = await HubProduct.find({ _id: { $in: productIds }, isActive: true });
 
     const byId = new Map(products.map((p) => [String(p._id), p]));
-    for (const it of items) {
-      const p = byId.get(it.productId);
+    for (const line of lines) {
+      const p = byId.get(line.productId);
       if (!p) return fail("One of the items in your cart is no longer available");
       if (!p.isAvailable) return fail(`${p.name} is currently unavailable`);
-      if (typeof p.stock === "number" && p.stock < it.quantity) {
+      if (typeof p.stock === "number" && p.stock < line.quantity) {
         return fail(`Only ${p.stock} left of ${p.name}`);
       }
     }
@@ -73,14 +94,14 @@ export async function POST(req: NextRequest) {
       return fail("This vendor's location isn't set up yet — please try another vendor");
     }
 
-    const orderItems = items.map((it) => {
-      const p = byId.get(it.productId)!;
+    const orderItems = lines.map((line) => {
+      const p = byId.get(line.productId)!;
       return {
         productId: p._id,
         name: p.name,
         imageUrl: p.imageUrl,
         unitPriceKobo: p.priceKobo,
-        quantity: it.quantity,
+        quantity: line.quantity,
       };
     });
 
