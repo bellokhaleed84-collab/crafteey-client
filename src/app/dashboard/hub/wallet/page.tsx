@@ -107,7 +107,7 @@ export default function WalletPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/dashboard/hub" aria-label="Back to Hub" className="text-brand">
+        <Link href="/dashboard" aria-label="Back to home" className="text-brand">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <h1 className="text-lg font-bold text-brand">Wallet</h1>

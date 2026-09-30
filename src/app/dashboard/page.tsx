@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, MapPin, UtensilsCrossed, Car, Wrench, Clock, ChevronRight } from "lucide-react";
+import { Bell, MapPin, UtensilsCrossed, Car, Wrench, Clock, Wallet, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import ActiveHubOrderBanner from "@/components/hub/ActiveHubOrderBanner";
@@ -33,6 +33,14 @@ const SERVICES = [
     href: "/dashboard/technicians",
     icon: Wrench,
     tone: "bg-brand/10 text-brand",
+  },
+  {
+    key: "wallet",
+    label: "Wallet",
+    sub: "Top up & refunds",
+    href: "/dashboard/hub/wallet",
+    icon: Wallet,
+    tone: "bg-sunshine/20 text-sunshine-dark",
   },
   {
     key: "history",
@@ -194,22 +202,22 @@ export default function DashboardHomePage() {
         <p className="mt-1 text-xs text-white/80">Whatever you need, Crafteey delivers.</p>
       </div>
 
-      {/* Service cards — four in a row */}
+      {/* Service cards */}
       <div>
         <p className="mb-3 text-sm font-bold text-brand">Explore Crafteey</p>
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {SERVICES.map((s) => {
             const Icon = s.icon;
             return (
               <Link
                 key={s.key}
                 href={s.href}
-                className="min-w-0 rounded-2xl bg-white p-2.5 shadow-card transition hover:shadow-card-lg"
+                className="min-w-0 rounded-2xl bg-white p-3 shadow-card transition hover:shadow-card-lg"
               >
                 <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${s.tone}`}>
                   <Icon className="h-4 w-4" />
                 </span>
-                <p className="mt-2 break-words text-[11px] font-bold leading-tight text-brand">{s.label}</p>
+                <p className="mt-2 break-words text-xs font-bold leading-tight text-brand">{s.label}</p>
                 <p className="mt-0.5 break-words text-[10px] leading-tight text-steel">{s.sub}</p>
               </Link>
             );
@@ -217,7 +225,7 @@ export default function DashboardHomePage() {
         </div>
       </div>
 
-      {/* Recent activity — now wired to real Hub orders + Rides bookings */}
+      {/* Recent activity — wired to real Hub orders + Rides bookings */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-bold text-brand">Recent activity</p>
