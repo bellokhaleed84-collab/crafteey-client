@@ -152,7 +152,7 @@ export default function HubPage() {
             visibleRestaurants.map((r) => (
               <Link
                 key={r._id}
-                href={`/dashboard/hub/food?vendor=${r._id}`}
+                href={`/dashboard/hub/vendors/${r._id}`}
                 className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card"
               >
                 <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-3xl">
