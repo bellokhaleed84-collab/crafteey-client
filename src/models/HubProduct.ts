@@ -11,6 +11,8 @@ export interface IHubProduct {
   emoji?: string;
   priceKobo: number;
   unit?: string;
+  /** Menu section on the vendor page, e.g. "Meals", "Drinks", "Snacks", "Desserts" */
+  menuSection?: string;
   /** null/undefined = unlimited */
   stock?: number | null;
   isAvailable: boolean;
@@ -28,6 +30,7 @@ const HubProductSchema = new Schema<IHubProduct>(
     emoji: String,
     priceKobo: { type: Number, required: true, min: 0 },
     unit: String,
+    menuSection: { type: String, trim: true },
     stock: { type: Number, default: null },
     isAvailable: { type: Boolean, default: true },
     isActive: { type: Boolean, default: true },

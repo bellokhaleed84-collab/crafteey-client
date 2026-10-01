@@ -8,6 +8,8 @@ export interface IHubVendor {
   categories: HubCategory[];
   description?: string;
   logoUrl?: string;
+  /** Banner image shown on the vendor page. Set from the admin dashboard. */
+  bannerUrl?: string;
   address?: string;
   lat?: number;
   lng?: number;
@@ -34,6 +36,7 @@ const HubVendorSchema = new Schema<IHubVendor>(
     categories: { type: [{ type: String, enum: HUB_CATEGORIES }], default: [], index: true },
     description: String,
     logoUrl: String,
+    bannerUrl: String,
     address: String,
     lat: Number,
     lng: Number,

@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { verifyToken } from "@/middleware/auth";
 import HubOrder from "@/models/HubOrder";
 import HubVendor from "@/models/HubVendor";
+import HubReview from "@/models/HubReview";
 import CourierRequest from "@/models/CourierRequest";
 import { fail, handleError } from "@/lib/hub/http";
 
@@ -43,6 +44,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       }
     }
 
+    const review =
+      order.status === "delivered"
+        ? await HubReview.findOne({ orderId: order._id }).select("rating comment").lean()
+        : null;
+
     return NextResponse.json({
       order: {
         _id: String(order._id),
@@ -65,6 +71,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           phone: order.delivery.phone,
           note: order.delivery.note,
         },
+        cancelReason: order.cancelReason ?? null,
+        refund:
+          order.refund?.status === "refunded"
+            ? { amountKobo: order.refund.amountKobo, method: order.refund.method }
+            : null,
+        review: review ? { rating: review.rating, comment: review.comment ?? null } : null,
         createdAt: order.createdAt,
         courier,
       },

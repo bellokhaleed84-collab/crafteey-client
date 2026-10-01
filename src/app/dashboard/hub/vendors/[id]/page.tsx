@@ -3,15 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Clock, MapPin, Minus, Plus, Star, Bike, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Clock, MapPin, Minus, Plus, Star, ShoppingBag } from "lucide-react";
 import { useCart, type CartItem } from "@/contexts/CartContext";
 import { formatNaira } from "@/lib/hub/config";
 
 interface VendorDTO {
   _id: string;
   name: string;
-  logoUrl: string | null;
-  emoji: string | null;
+  bannerUrl: string | null;
   tagline: string | null;
   description: string | null;
   address: string | null;
@@ -20,8 +19,6 @@ interface VendorDTO {
   closeTime: string | null;
   rating: number | null;
   reviewCount: number;
-  etaMin: number | null;
-  etaMax: number | null;
 }
 
 interface ProductDTO {
@@ -32,7 +29,7 @@ interface ProductDTO {
   imageUrl: string | null;
   emoji: string | null;
   unit: string | null;
-  category: string;
+  menuSection: string | null;
   available: boolean;
 }
 
@@ -47,8 +44,6 @@ function fmtTime(t: string | null): string | null {
   return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h >= 12 ? "PM" : "AM"}`;
 }
 
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
 export default function VendorPage() {
   const { id } = useParams<{ id: string }>();
   const { addItem, replaceWith, setQuantity, quantityOf, count, subtotalKobo, hydrated } = useCart();
@@ -57,6 +52,7 @@ export default function VendorPage() {
   const [products, setProducts] = useState<ProductDTO[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [section, setSection] = useState("All");
   const [conflict, setConflict] = useState<{ item: CartInput; currentVendorName: string } | null>(null);
 
   useEffect(() => {
@@ -83,11 +79,11 @@ export default function VendorPage() {
     };
   }, [id]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, ProductDTO[]>();
-    products.forEach((p) => map.set(p.category, [...(map.get(p.category) ?? []), p]));
-    return Array.from(map.entries());
-  }, [products]);
+  const sections = useMemo(
+    () => Array.from(new Set(products.map((p) => p.menuSection).filter((s): s is string => !!s))),
+    [products]
+  );
+  const visible = section === "All" ? products : products.filter((p) => p.menuSection === section);
 
   function add(p: ProductDTO) {
     if (!vendor) return;
@@ -127,74 +123,70 @@ export default function VendorPage() {
 
   const open = fmtTime(vendor.openTime);
   const close = fmtTime(vendor.closeTime);
+  const hoursText = vendor.isOpen
+    ? close
+      ? `Open now · Closes ${close}`
+      : "Open now"
+    : open
+    ? `Closed · Opens ${open}`
+    : "Closed";
 
   return (
     <div className="space-y-5 pb-28">
-      {/* Header */}
-      <div className="rounded-3xl bg-sunshine px-5 pb-5 pt-4">
-        <Link
-          href="/dashboard/hub"
-          aria-label="Back to Hub"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/80 text-brand"
-        >
+      {/* Top bar */}
+      <div className="flex items-center gap-3">
+        <Link href="/dashboard/hub" aria-label="Back to Hub" className="text-brand">
           <ArrowLeft className="h-5 w-5" />
         </Link>
+        <h1 className="text-lg font-bold text-brand">Crafteey Hub</h1>
+      </div>
 
-        <div className="mt-4 flex items-center gap-4">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-white bg-white text-4xl shadow-card">
-            {vendor.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={vendor.logoUrl} alt={`${vendor.name} logo`} className="h-full w-full object-cover" />
+      {/* Hero card */}
+      <div className="relative min-h-[10rem] overflow-hidden rounded-3xl bg-surface-muted">
+        <div className={`relative z-10 space-y-1.5 p-5 ${vendor.bannerUrl ? "w-[58%]" : ""}`}>
+          <h2 className="text-xl font-extrabold leading-tight text-brand">{vendor.name}</h2>
+          {vendor.tagline && <p className="text-xs font-medium text-steel">{vendor.tagline}</p>}
+
+          <p className="flex items-center gap-1.5 text-sm font-bold text-brand">
+            <Star className="h-4 w-4 fill-sunshine text-sunshine" />
+            {vendor.rating ? (
+              <>
+                {vendor.rating.toFixed(1)}
+                <span className="font-medium text-steel">
+                  ({vendor.reviewCount} {vendor.reviewCount === 1 ? "review" : "reviews"})
+                </span>
+              </>
             ) : (
-              (vendor.emoji ?? "🍽️")
+              <span className="font-medium text-steel">New · no reviews yet</span>
             )}
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-extrabold leading-tight text-brand">{vendor.name}</h1>
-            {vendor.tagline && <p className="mt-0.5 text-xs font-medium text-brand/70">{vendor.tagline}</p>}
-            <span
-              className={`mt-2 inline-block rounded-full px-3 py-1 text-xs font-bold ${
-                vendor.isOpen ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
-              }`}
-            >
-              {vendor.isOpen ? "Open now" : "Closed"}
-            </span>
-          </div>
+          </p>
+
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-brand">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            <span className={vendor.isOpen ? "text-green-700" : "text-red-600"}>{hoursText}</span>
+          </p>
+
+          {vendor.address && (
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-brand">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="line-clamp-2">{vendor.address}</span>
+            </p>
+          )}
         </div>
-      </div>
 
-      {/* Info chips */}
-      <div className="flex flex-wrap gap-2 text-xs font-semibold text-brand">
-        <span className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 shadow-card">
-          <Star className="h-3.5 w-3.5 fill-sunshine text-sunshine" />
-          {vendor.rating ? `${vendor.rating.toFixed(1)} (${vendor.reviewCount})` : "New"}
-        </span>
-        {vendor.etaMin && vendor.etaMax && (
-          <span className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 shadow-card">
-            <Bike className="h-3.5 w-3.5 text-brand-accent" />
-            {vendor.etaMin}-{vendor.etaMax} mins
-          </span>
-        )}
-        {open && close && (
-          <span className="flex items-center gap-1 rounded-xl bg-white px-3 py-1.5 shadow-card">
-            <Clock className="h-3.5 w-3.5 text-brand-accent" />
-            {open} – {close}
-          </span>
-        )}
-        {vendor.address && (
-          <span className="flex min-w-0 items-center gap-1 rounded-xl bg-white px-3 py-1.5 shadow-card">
-            <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-accent" />
-            <span className="truncate">{vendor.address}</span>
-          </span>
+        {vendor.bannerUrl && (
+          <div className="absolute inset-y-0 right-0 w-[42%] overflow-hidden rounded-l-[2.5rem]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={vendor.bannerUrl} alt="" className="h-full w-full object-cover" />
+          </div>
         )}
       </div>
 
-      {vendor.description && <p className="text-sm text-steel">{vendor.description}</p>}
+      {vendor.description && <p className="text-sm leading-relaxed text-steel">{vendor.description}</p>}
 
       {!vendor.isOpen && (
         <p className="rounded-2xl bg-red-50 p-3 text-xs text-red-700">
-          {vendor.name} is closed right now{open ? `. They open at ${open}` : ""}. You can browse the menu, but
-          ordering is available once they reopen.
+          {vendor.name} is closed right now. You can browse the menu, but ordering opens when they reopen.
         </p>
       )}
 
@@ -202,9 +194,7 @@ export default function VendorPage() {
       {conflict && (
         <div className="space-y-3 rounded-2xl bg-amber-50 p-4 text-xs text-amber-900">
           <p className="font-bold">Start a new cart?</p>
-          <p>
-            Your cart has items from {conflict.currentVendorName}. You can only order from one place at a time.
-          </p>
+          <p>Your cart has items from {conflict.currentVendorName}. You can only order from one place at a time.</p>
           <div className="flex gap-2">
             <button
               type="button"
@@ -227,82 +217,99 @@ export default function VendorPage() {
         </div>
       )}
 
-      {/* Menu */}
-      {products.length === 0 ? (
+      {/* Section chips: only once the vendor has set sections */}
+      {sections.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto [scrollbar-width:none]">
+          {["All", ...sections].map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setSection(s)}
+              className={`shrink-0 rounded-2xl px-5 py-2.5 text-xs font-bold ${
+                section === s ? "bg-sunshine text-brand" : "bg-surface-muted text-steel"
+              }`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Menu: one column */}
+      <p className="text-base font-extrabold text-brand">Menu</p>
+      {visible.length === 0 ? (
         <p className="rounded-2xl bg-white p-6 text-center text-sm text-steel shadow-card">
-          This vendor hasn&apos;t added any items yet.
+          {products.length === 0 ? "This vendor hasn't added any items yet." : "Nothing in this section yet."}
         </p>
       ) : (
-        grouped.map(([cat, items]) => (
-          <div key={cat} className="space-y-2">
-            {grouped.length > 1 && <p className="text-sm font-bold text-brand">{cap(cat)}</p>}
-            {grouped.length === 1 && <p className="text-sm font-bold text-brand">Menu</p>}
-            <div className="space-y-2">
-              {items.map((p) => {
-                const qty = hydrated ? quantityOf(p._id) : 0;
-                const canOrder = p.available && vendor.isOpen;
-                return (
-                  <div key={p._id} className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card">
-                    <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-3xl">
-                      {p.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
-                      ) : (
-                        (p.emoji ?? "🍽️")
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-bold text-brand">{p.name}</p>
-                      {p.description && <p className="line-clamp-2 text-xs text-steel">{p.description}</p>}
-                      <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <div>
-                          <span className="text-sm font-extrabold text-brand">{formatNaira(p.priceKobo)}</span>
-                          {p.unit && <span className="ml-1 text-[11px] text-steel">/ {p.unit}</span>}
-                        </div>
+        <div className="space-y-3">
+          {visible.map((p) => {
+            const qty = hydrated ? quantityOf(p._id) : 0;
+            const canOrder = p.available && vendor.isOpen;
+            return (
+              <div key={p._id} className="flex gap-3 rounded-2xl border border-slate-100 bg-white p-3 shadow-card">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-4xl">
+                  {p.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
+                  ) : (
+                    (p.emoji ?? "🍽️")
+                  )}
+                </div>
 
-                        {!p.available ? (
-                          <span className="rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600">
-                            Sold out
-                          </span>
-                        ) : qty > 0 ? (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => setQuantity(p._id, qty - 1)}
-                              aria-label={`Remove one ${p.name}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-brand"
-                            >
-                              <Minus className="h-3.5 w-3.5" />
-                            </button>
-                            <span className="w-5 text-center text-xs font-bold text-brand">{qty}</span>
-                            <button
-                              type="button"
-                              onClick={() => add(p)}
-                              disabled={!canOrder}
-                              aria-label={`Add one more ${p.name}`}
-                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-sunshine text-brand disabled:opacity-50"
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => add(p)}
-                            disabled={!canOrder}
-                            className="rounded-xl bg-sunshine px-4 py-1.5 text-xs font-extrabold text-brand disabled:opacity-50"
-                          >
-                            {vendor.isOpen ? "Add" : "Closed"}
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                <div className="flex min-w-0 flex-1 flex-col justify-between">
+                  <div>
+                    <p className="truncate text-sm font-bold text-brand">{p.name}</p>
+                    {p.description && <p className="line-clamp-2 text-xs text-steel">{p.description}</p>}
+                    <p className="mt-1 text-sm font-extrabold text-brand">
+                      {formatNaira(p.priceKobo)}
+                      {p.unit && <span className="ml-1 text-[11px] font-medium text-steel">/ {p.unit}</span>}
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        ))
+
+                  <div className="mt-2 flex justify-end">
+                    {!p.available ? (
+                      <span className="rounded-full bg-red-50 px-3 py-1 text-[11px] font-bold text-red-600">
+                        Sold out
+                      </span>
+                    ) : qty > 0 ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuantity(p._id, qty - 1)}
+                          aria-label={`Remove one ${p.name}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-muted text-brand"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <span className="w-5 text-center text-sm font-bold text-brand">{qty}</span>
+                        <button
+                          type="button"
+                          onClick={() => add(p)}
+                          disabled={!canOrder}
+                          aria-label={`Add one more ${p.name}`}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg bg-sunshine text-brand disabled:opacity-50"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => add(p)}
+                        disabled={!canOrder}
+                        className="flex items-center gap-1 rounded-xl bg-sunshine px-4 py-2 text-xs font-extrabold text-brand disabled:opacity-50"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        {vendor.isOpen ? "Add" : "Closed"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Cart bar */}
