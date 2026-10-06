@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Droplet, Zap, PaintBucket, Hammer } from "lucide-react";
+import { Droplet, Zap, PaintBucket, Hammer, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { JOB_STATUS } from "@/lib/constants";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -36,7 +36,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 // Quick shortcuts straight into "Post a job" with the trade pre-selected.
 // post-job/page.tsx needs to read this ?category= param and preselect it
-// for these to actually save a step — check that file if it doesn't yet.
+// for these to actually save a step. Check that file if it doesn't yet.
 const TRADE_SHORTCUTS = [
   { label: "Plumbing", icon: Droplet, tone: "bg-brand-accent/10 text-brand-accent" },
   { label: "Electrical", icon: Zap, tone: "bg-sunshine/20 text-sunshine-dark" },
@@ -86,6 +86,18 @@ export default function TechniciansPage() {
         <p className="text-base font-extrabold">Skilled Technicians You Can Trust</p>
         <p className="mt-1 text-xs text-white/80">Verified professionals for your home and business</p>
       </div>
+
+      {/* Browse companies */}
+      <Link
+        href="/dashboard/companies"
+        className="flex items-center justify-between rounded-2xl bg-sunshine p-4 shadow-card-lg"
+      >
+        <div>
+          <p className="text-sm font-extrabold text-brand">Browse companies</p>
+          <p className="text-xs text-brand/70">Pick a verified company and chat with them</p>
+        </div>
+        <ChevronRight className="h-5 w-5 text-brand" />
+      </Link>
 
       {/* Trade shortcuts */}
       <div className="grid grid-cols-4 gap-2.5">
