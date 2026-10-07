@@ -16,7 +16,7 @@ export default function DashboardNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+    <nav className="fixed inset-x-0 bottom-0 z-50 pb-[env(safe-area-inset-bottom)] border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
       <div className="mx-auto flex max-w-2xl">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive =

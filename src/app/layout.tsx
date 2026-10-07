@@ -1,8 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import RegisterSW from "@/components/RegisterSW";
+import AppSplash from "@/components/AppSplash";
+import NativeBackButton from "@/components/NativeBackButton";
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
+};
 
 export const metadata: Metadata = {
   title: "Crafteey",
@@ -18,12 +24,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <meta name="theme-color" content="#0f172a" />
+        <meta name="theme-color" content="#4002AF" />
       </head>
       <body className="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <ThemeProvider>
           <AuthProvider>
             <RegisterSW />
+            <AppSplash />
+            <NativeBackButton />
             {children}
           </AuthProvider>
         </ThemeProvider>
