@@ -19,6 +19,7 @@ interface AuthContextType {
   user: User | null;
   client: ClientProfile | null;
   loading: boolean;
+  profileError: boolean;
   signOut: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
   refetchClient: () => Promise<void>;
@@ -26,39 +27,53 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [client, setClient] = useState<ClientProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+type ProfileResult = { client: ClientProfile | null; error: boolean };
 
-  async function fetchClient(firebaseUser: User) {
+async function loadProfile(firebaseUser: User): Promise<ProfileResult> {
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const token = await firebaseUser.getIdToken();
       const response = await fetch("/api/clients/me", {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
       if (response.ok) {
         const data = await response.json();
-        setClient(data.client);
-      } else {
-        setClient(null);
+        return { client: data.client ?? null, error: false };
       }
+      // A real "no profile yet" answer: send them to register.
+      if (response.status === 404) return { client: null, error: false };
     } catch (error) {
       console.error("Error fetching client profile:", error);
-      setClient(null);
     }
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
   }
+  // Slow or failed server: do NOT treat this as "no profile".
+  return { client: null, error: true };
+}
+
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [client, setClient] = useState<ClientProfile | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [profileError, setProfileError] = useState<boolean>(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      setLoading(false);
-
-      if (firebaseUser) {
-        await fetchClient(firebaseUser);
-      } else {
+      if (!firebaseUser) {
+        setUser(null);
         setClient(null);
+        setProfileError(false);
+        setLoading(false);
+        return;
       }
+      // Stay in "loading" until the profile is known, so nothing redirects early.
+      setLoading(true);
+      const result = await loadProfile(firebaseUser);
+      setUser(firebaseUser);
+      setClient(result.client);
+      setProfileError(result.error);
+      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -68,6 +83,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await firebaseSignOut(auth);
     setUser(null);
     setClient(null);
+    setProfileError(false);
   };
 
   const getIdToken = async () => {
@@ -76,12 +92,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const refetchClient = async () => {
-    if (auth.currentUser) await fetchClient(auth.currentUser);
+    if (!auth.currentUser) return;
+    const result = await loadProfile(auth.currentUser);
+    setClient(result.client);
+    setProfileError(result.error);
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, client, loading, signOut: handleSignOut, getIdToken, refetchClient }}
+      value={{ user, client, loading, profileError, signOut: handleSignOut, getIdToken, refetchClient }}
     >
       {children}
     </AuthContext.Provider>
