@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, Search, Heart, SlidersHorizontal, UtensilsCrossed, ShoppingBasket, CupSoda, Store } from "lucide-react";
 import { formatNaira } from "@/lib/hub/config";
 import type { HubProduct, HubVendorDTO } from "@/lib/hub/types";
+import BannerCarousel from "@/components/home/BannerCarousel";
 
 const QUICK_CATEGORIES = [
   { label: "Food", href: "/dashboard/hub/food", icon: UtensilsCrossed, tone: "bg-sunshine/20 text-sunshine-dark" },
@@ -22,10 +23,20 @@ function formatReviews(n?: number) {
 
 function formatMeta(r: HubVendorDTO) {
   const parts: string[] = [];
-  if (r.rating) parts.push(`⭐ ${r.rating}${r.reviewCount ? ` (${formatReviews(r.reviewCount)})` : ""}`);
+  if (r.rating) parts.push(`\u2B50 ${r.rating}${r.reviewCount ? ` (${formatReviews(r.reviewCount)})` : ""}`);
   if (r.etaMin && r.etaMax) parts.push(`${r.etaMin}-${r.etaMax} mins`);
   if (!r.isOpen) parts.push("Closed");
-  return parts.join(" · ");
+  return parts.join(" \u00B7 ");
+}
+
+// Shown when there are no Hub banners switched on in the admin.
+function DefaultHubBanner() {
+  return (
+    <div className="rounded-2xl bg-sunshine p-5">
+      <p className="text-base font-extrabold text-brand">Good Food, Great Mood</p>
+      <p className="mt-1 text-xs font-medium text-brand/70">Fresh meals, fast delivery</p>
+    </div>
+  );
 }
 
 export default function HubPage() {
@@ -73,7 +84,7 @@ export default function HubPage() {
         </Link>
         <h1 className="text-lg font-bold text-brand">Crafteey Hub</h1>
       </div>
-      <p className="-mt-4 text-xs text-steel">📍 Lagos, Nigeria</p>
+      <p className="-mt-4 text-xs text-steel">{"\uD83D\uDCCD"} Lagos, Nigeria</p>
 
       <div className="flex items-center gap-2">
         <div className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-card">
@@ -82,7 +93,7 @@ export default function HubPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search for restaurants, groceries, products…"
+            placeholder={"Search for restaurants, groceries, products\u2026"}
             className="w-full bg-transparent text-sm text-brand outline-none placeholder:text-steel"
           />
         </div>
@@ -95,7 +106,7 @@ export default function HubPage() {
         </button>
       </div>
 
-      {/* Category shortcuts — each opens its own page and shows only that category */}
+      {/* Category shortcuts - each opens its own page and shows only that category */}
       <div className="grid grid-cols-4 gap-2.5">
         {QUICK_CATEGORIES.map((c) => {
           const Icon = c.icon;
@@ -114,10 +125,8 @@ export default function HubPage() {
         })}
       </div>
 
-      <div className="rounded-2xl bg-sunshine p-5">
-        <p className="text-base font-extrabold text-brand">Good Food, Great Mood</p>
-        <p className="mt-1 text-xs font-medium text-brand/70">Fresh meals, fast delivery</p>
-      </div>
+      {/* Hub banners - managed from the admin Banners page (Show on: Hub or Both) */}
+      <BannerCarousel placement="hub" fallback={<DefaultHubBanner />} />
 
       <div className="flex gap-2 overflow-x-auto whitespace-nowrap [scrollbar-width:none]">
         {FILTER_TABS.map((cat) => (
@@ -146,7 +155,7 @@ export default function HubPage() {
             [0, 1, 2].map((i) => <div key={i} className="h-[88px] animate-pulse rounded-2xl bg-white shadow-card" />)
           ) : visibleRestaurants.length === 0 ? (
             <p className="rounded-2xl bg-white p-4 text-center text-xs text-steel shadow-card">
-              {debounced ? `No restaurants match “${debounced}”.` : "No restaurants here yet."}
+              {debounced ? `No restaurants match \u201C${debounced}\u201D.` : "No restaurants here yet."}
             </p>
           ) : (
             visibleRestaurants.map((r) => (
@@ -160,7 +169,7 @@ export default function HubPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={r.logoUrl} alt={r.name} className="h-full w-full object-cover" />
                   ) : (
-                    (r.emoji ?? "🍽️")
+                    (r.emoji ?? "\uD83C\uDF7D\uFE0F")
                   )}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -192,7 +201,7 @@ export default function HubPage() {
           </div>
         ) : picks.length === 0 ? (
           <p className="rounded-2xl bg-white p-4 text-center text-xs text-steel shadow-card">
-            {debounced ? `No products match “${debounced}”.` : "No marketplace items yet."}
+            {debounced ? `No products match \u201C${debounced}\u201D.` : "No marketplace items yet."}
           </p>
         ) : (
           <div className="grid grid-cols-3 gap-3">
@@ -203,7 +212,7 @@ export default function HubPage() {
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
                   ) : (
-                    (p.emoji ?? "🛍️")
+                    (p.emoji ?? "\uD83D\uDECD\uFE0F")
                   )}
                 </div>
                 <p className="mt-2 line-clamp-2 text-[11px] font-semibold leading-tight text-brand">{p.name}</p>

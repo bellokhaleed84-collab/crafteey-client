@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import BannerSlideView, { type BannerView } from "@/components/BannerSlideView";
 
@@ -42,7 +42,13 @@ function Slide({ banner }: { banner: PublicBanner }) {
   );
 }
 
-export default function BannerCarousel() {
+export default function BannerCarousel({
+  placement = "home",
+  fallback,
+}: {
+  placement?: "home" | "hub";
+  fallback?: ReactNode;
+}) {
   const [banners, setBanners] = useState<PublicBanner[] | null>(null);
   const [index, setIndex] = useState(0);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -52,7 +58,7 @@ export default function BannerCarousel() {
     let cancelled = false;
     async function load() {
       try {
-        const res = await fetch("/api/banners", { cache: "no-store" });
+        const res = await fetch(`/api/banners?placement=${placement}`, { cache: "no-store" });
         const d = await res.json().catch(() => ({}));
         if (!cancelled) setBanners(res.ok && Array.isArray(d.banners) ? d.banners : []);
       } catch {
@@ -63,7 +69,7 @@ export default function BannerCarousel() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [placement]);
 
   const count = banners?.length ?? 0;
 
@@ -98,10 +104,16 @@ export default function BannerCarousel() {
   }
 
   if (banners === null) {
-    return <div className="aspect-[11/5] w-full animate-pulse rounded-2xl bg-white shadow-card" aria-busy="true" />;
+    return (
+      <div
+        className="w-full animate-pulse rounded-2xl bg-slate-200"
+        style={{ aspectRatio: "2 / 1" }}
+        aria-busy="true"
+      />
+    );
   }
 
-  if (banners.length === 0) return <StaticPromo />;
+  if (banners.length === 0) return <>{fallback ?? <StaticPromo />}</>;
 
   return (
     <div>

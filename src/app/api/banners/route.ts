@@ -15,14 +15,22 @@ type BannerRow = {
   theme?: string;
 };
 
-/** GET /api/banners - public. Only banners that are switched on and inside their schedule. */
-export async function GET() {
+/**
+ * GET /api/banners?placement=home|hub - public.
+ * Only banners that are switched on and inside their schedule.
+ * Old banners with no placement count as Home.
+ */
+export async function GET(req: Request) {
   try {
     await connectToDatabase();
     const now = new Date();
+    const placement = new URL(req.url).searchParams.get("placement") === "hub" ? "hub" : "home";
+    const placementFilter =
+      placement === "hub" ? { placement: { $in: ["hub", "both"] } } : { placement: { $ne: "hub" } };
 
     const rows = await Banner.find({
       enabled: true,
+      ...placementFilter,
       $and: [
         { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
         { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] },
