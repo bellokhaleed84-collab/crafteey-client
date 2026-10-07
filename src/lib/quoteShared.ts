@@ -1,4 +1,4 @@
-import type { IQuote, QuoteStatus } from "@/models/";
+import type { IQuote, QuoteStatus } from "@/models/Quote";
 
 export const QUOTE_LIMITS = {
   minKobo: 50_000, // N500

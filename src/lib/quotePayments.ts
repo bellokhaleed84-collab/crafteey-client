@@ -1,7 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { connectToDatabase } from "@/lib/mongodb";
 import { adminDb } from "@/lib/firebase/adminApp";
-import Quote, { type IQuote } from "@/models/";
+import Quote, { type IQuote } from "@/models/Quote";
 import { verifyTransaction } from "@/lib/paystack";
 import { creditWallet } from "@/lib/wallet";
 
