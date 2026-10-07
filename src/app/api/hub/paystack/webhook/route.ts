@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { connectToDatabase } from "@/lib/mongodb";
 import { isValidWebhookSignature } from "@/lib/paystack";
 import { settleOrderFromPaystack } from "@/lib/hub/orders";
+import { settleQuoteFromPaystack } from "@/lib/quotePayments";
+import { settleWalletTopup } from "@/lib/wallet";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Set this URL in Paystack Dashboard → Settings → API Keys & Webhooks:
+ * The ONE Paystack webhook for the whole platform. URL stays the same:
  *   https://YOUR-DOMAIN/api/hub/paystack/webhook
- * It confirms payment even if the customer closes the browser before returning.
+ * Each payment is sent to the right handler by its reference prefix:
+ *   hub-    Hub orders
+ *   quote-  company quotations
+ *   wtop-   wallet top-ups
+ * Every handler re-verifies with Paystack and is safe to run more than once.
  */
 export async function POST(req: NextRequest) {
   const raw = await req.text(); // must be the raw body for the signature check
@@ -23,11 +30,14 @@ export async function POST(req: NextRequest) {
   }
 
   if (evt.event === "charge.success" && evt.data?.reference) {
+    const reference = String(evt.data.reference);
     try {
-      // Re-verifies with Paystack instead of trusting the webhook body
-      await settleOrderFromPaystack(String(evt.data.reference));
+      await connectToDatabase();
+      if (reference.startsWith("hub-")) await settleOrderFromPaystack(reference);
+      else if (reference.startsWith("quote-")) await settleQuoteFromPaystack(reference);
+      else if (reference.startsWith("wtop-")) await settleWalletTopup(reference);
     } catch (e) {
-      console.error("[hub] webhook settle failed", e);
+      console.error("[paystack] webhook settle failed", reference, e);
       return NextResponse.json({ error: "Retry" }, { status: 500 }); // Paystack will retry
     }
   }
