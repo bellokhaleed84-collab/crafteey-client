@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search, Heart, SlidersHorizontal, UtensilsCrossed, ShoppingBasket, CupSoda, Store } from "lucide-react";
+import { Search, Heart, SlidersHorizontal, UtensilsCrossed, ShoppingBasket, CupSoda, Store } from "lucide-react";
 import { formatNaira } from "@/lib/hub/config";
 import type { HubProduct, HubVendorDTO } from "@/lib/hub/types";
 import BannerCarousel from "@/components/home/BannerCarousel";
@@ -91,12 +91,7 @@ export default function HubPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link href="/dashboard" aria-label="Back" className="text-brand dark:text-white">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <h1 className="text-lg font-bold text-brand dark:text-white">Crafteey Hub</h1>
-      </div>
+      <h1 className="text-lg font-bold text-brand dark:text-white">Crafteey Hub</h1>
       <p className="-mt-4 text-xs text-steel">{"\uD83D\uDCCD"} Lagos, Nigeria</p>
 
       <div className="flex items-center gap-2">
