@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, Star } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { authedFetch } from "@/lib/chatApi";
 import { nairaText } from "@/lib/quoteShared";
 import { JOB_LABEL, JOB_STEPS, type JobStatusKey } from "@/lib/jobShared";
+import RatingSheet from "@/components/RatingSheet";
+import { SkeletonList } from "@/components/ui/Skeleton";
 
 type JobView = {
   id: string;
@@ -24,6 +26,7 @@ type JobView = {
   completedAt: string | null;
   paidKobo: number;
   payments: { title: string; kind: "main" | "additional"; totalKobo: number }[];
+  review: { rating: number; comment: string } | null;
 };
 
 function when(iso: string | null): string {
@@ -33,11 +36,25 @@ function when(iso: string | null): string {
   );
 }
 
+function Stars({ value }: { value: number }) {
+  return (
+    <span className="flex gap-0.5" aria-label={`${value} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          className={`h-5 w-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-slate-300 dark:text-slate-600"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 export default function WorkJobPage() {
   const { id } = useParams<{ id: string }>();
   const { getIdToken } = useAuth();
   const [job, setJob] = useState<JobView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRating, setShowRating] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -57,10 +74,25 @@ export default function WorkJobPage() {
     return () => clearInterval(t);
   }, [load]);
 
+  async function submitReview(rating: number, comment: string): Promise<string | null> {
+    try {
+      const res = await authedFetch(getIdToken, "/api/reviews", {
+        method: "POST",
+        body: JSON.stringify({ sourceType: "company_job", sourceId: id, rating, comment }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return data.error || "Couldn't send your review. Try again.";
+      void load();
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : "Couldn't send your review. Try again.";
+    }
+  }
+
   if (error && !job) {
     return <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>;
   }
-  if (!job) return <p className="text-sm text-steel">Loading...</p>;
+  if (!job) return <SkeletonList count={3} />;
 
   const stamp: Record<string, string | null> = {
     confirmed: job.confirmedAt,
@@ -117,6 +149,33 @@ export default function WorkJobPage() {
         {job.workerName && <p className="text-xs text-steel">from {job.companyName}</p>}
       </div>
 
+      {job.status === "completed" && (
+        <div className="space-y-2 rounded-2xl bg-white p-4 shadow-card dark:bg-slate-800">
+          <p className="text-xs font-semibold uppercase tracking-wide text-steel">Your review</p>
+          {job.review ? (
+            <>
+              <Stars value={job.review.rating} />
+              {job.review.comment && (
+                <p className="whitespace-pre-wrap break-words text-sm text-slate-600 dark:text-slate-300">
+                  {job.review.comment}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-600 dark:text-slate-300">How was {job.companyName}?</p>
+              <button
+                type="button"
+                onClick={() => setShowRating(true)}
+                className="min-h-12 w-full rounded-xl bg-sunshine px-5 font-bold text-brand"
+              >
+                Rate this company
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="space-y-2 rounded-2xl bg-white p-4 shadow-card dark:bg-slate-800">
         <p className="text-xs font-semibold uppercase tracking-wide text-steel">Payments</p>
         {job.payments.map((p, n) => (
@@ -137,6 +196,15 @@ export default function WorkJobPage() {
       >
         Open chat
       </Link>
+
+      {showRating && (
+        <RatingSheet
+          title={`Rate ${job.companyName}`}
+          subtitle={job.title}
+          onClose={() => setShowRating(false)}
+          onSubmit={submitReview}
+        />
+      )}
     </div>
   );
 }

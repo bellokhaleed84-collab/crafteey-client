@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase/clientApp";
 import { useAuth } from "@/contexts/AuthContext";
 import { authedFetch } from "@/lib/chatApi";
 import { SkeletonList } from "@/components/ui/Skeleton";
+import ReviewsSheet from "@/components/ReviewsSheet";
 
 type Company = {
   _id: string;
@@ -69,6 +70,9 @@ export default function TechniciansPage() {
 
   // Existing chats, keyed by company
   const [chatsByCompany, setChatsByCompany] = useState<Record<string, ChatLink>>({});
+
+  // Reviews sheet
+  const [reviewsFor, setReviewsFor] = useState<Company | null>(null);
 
   // Request form
   const [selected, setSelected] = useState<Company | null>(null);
@@ -392,14 +396,27 @@ export default function TechniciansPage() {
                     {c.businessName}
                     {c.verified && <span className="ml-2 text-xs font-semibold text-emerald-600">Verified</span>}
                   </p>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-xs text-steel">
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-steel">
                     <span
                       aria-hidden="true"
                       className={`inline-block h-2 w-2 rounded-full ${c.isOnline ? "bg-emerald-500" : "bg-slate-300"}`}
                     />
-                    {c.isOnline ? "Online" : "Offline"} {"\u00B7"}{" "}
-                    {c.ratingCount > 0 ? `\u2605 ${c.rating.toFixed(1)} (${c.ratingCount})` : "New"} {"\u00B7"}{" "}
-                    {PRICE_LABEL[c.priceRange] ?? ""}
+                    <span>{c.isOnline ? "Online" : "Offline"}</span>
+                    <span>{"\u00B7"}</span>
+                    {c.ratingCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setReviewsFor(c)}
+                        aria-label={`See ${c.ratingCount} ${c.ratingCount === 1 ? "review" : "reviews"} for ${c.businessName}`}
+                        className="-my-2 py-2 font-semibold text-brand underline underline-offset-2"
+                      >
+                        {`\u2605 ${c.rating.toFixed(1)} (${c.ratingCount})`}
+                      </button>
+                    ) : (
+                      <span>New</span>
+                    )}
+                    <span>{"\u00B7"}</span>
+                    <span>{PRICE_LABEL[c.priceRange] ?? ""}</span>
                   </p>
                   <p className="mt-1 text-xs text-steel">{c.trades.map(prettyTrade).join(", ")}</p>
                   <p className="mt-0.5 text-xs text-slate-400">
@@ -442,6 +459,16 @@ export default function TechniciansPage() {
           );
         })}
       </div>
+
+      {reviewsFor && (
+        <ReviewsSheet
+          companyId={reviewsFor._id}
+          companyName={reviewsFor.businessName}
+          rating={reviewsFor.rating}
+          ratingCount={reviewsFor.ratingCount}
+          onClose={() => setReviewsFor(null)}
+        />
+      )}
     </div>
   );
 }

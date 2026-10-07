@@ -5,6 +5,7 @@ import { verifyToken, AuthError } from "@/middleware/auth";
 import CompanyJob from "@/models/CompanyJob";
 import Company from "@/models/Company";
 import Quote from "@/models/Quote";
+import Review from "@/models/Review";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       .select("title totalKobo kind")
       .sort({ createdAt: 1 })
       .lean();
+    const review = await Review.findOne({
+      sourceType: "company_job",
+      sourceId: String(job._id),
+      targetType: "company",
+    })
+      .select("rating comment")
+      .lean();
 
     return NextResponse.json({
       job: {
@@ -44,6 +52,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         completedAt: iso(job.completedAt),
         paidKobo: quotes.reduce((s, q) => s + q.totalKobo, 0),
         payments: quotes.map((q) => ({ title: q.title, kind: q.kind, totalKobo: q.totalKobo })),
+        review: review ? { rating: review.rating, comment: review.comment } : null,
       },
     });
   } catch (err) {
