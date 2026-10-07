@@ -6,6 +6,7 @@ import { Bell, MapPin, UtensilsCrossed, Car, Wrench, Clock, Wallet, ChevronRight
 import { useAuth } from "@/contexts/AuthContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import ActiveHubOrderBanner from "@/components/hub/ActiveHubOrderBanner";
+import BannerCarousel from "@/components/home/BannerCarousel";
 import { formatNaira, HUB_ORDER_STATUS_LABELS } from "@/lib/hub/config";
 import type { HubOrderDTO } from "@/lib/hub/types";
 
@@ -79,21 +80,21 @@ interface ActivityItem {
 }
 
 const HUB_EMOJI: Record<string, string> = {
-  pending_payment: "⏳",
-  paid: "✅",
-  preparing: "👨‍🍳",
-  out_for_delivery: "🛵",
-  delivered: "🎉",
-  cancelled: "❌",
+  pending_payment: "\u23F3",
+  paid: "\u2705",
+  preparing: "\uD83D\uDC68\u200D\uD83C\uDF73",
+  out_for_delivery: "\uD83D\uDEF5",
+  delivered: "\uD83C\uDF89",
+  cancelled: "\u274C",
 };
 
 function hubOrderToActivity(o: HubOrderDTO): ActivityItem {
   return {
     id: `hub-${o._id}`,
     href: `/dashboard/hub/orders/${o._id}`,
-    emoji: HUB_EMOJI[o.status] ?? "🧾",
+    emoji: HUB_EMOJI[o.status] ?? "\uD83E\uDDFE",
     title: o.vendorName,
-    subtitle: `${HUB_ORDER_STATUS_LABELS[o.status]} • ${formatNaira(o.totalKobo)}`,
+    subtitle: `${HUB_ORDER_STATUS_LABELS[o.status]} \u2022 ${formatNaira(o.totalKobo)}`,
     createdAt: o.createdAt,
   };
 }
@@ -110,8 +111,8 @@ function courierRequestToActivity(r: CourierRequestSummary): ActivityItem {
   return {
     id: `ride-${r._id}`,
     href: r.status === "delivered" || r.status === "cancelled" ? "/dashboard/history" : "/dashboard/rider",
-    emoji: "🛵",
-    title: `${r.pickup} → ${r.dropoff}`,
+    emoji: "\uD83D\uDEF5",
+    title: `${r.pickup} \u2192 ${r.dropoff}`,
     subtitle: statusLabel[r.status] ?? r.status,
     createdAt: r.createdAt,
   };
@@ -180,27 +181,24 @@ export default function DashboardHomePage() {
         </div>
 
         <h1 className="mt-4 text-xl font-extrabold text-brand">
-          {greeting()}, {firstName} 👋
+          {greeting()}, {firstName} {"\uD83D\uDC4B"}
         </h1>
         <p className="mt-1 text-sm font-medium text-brand/70">
           Everything you need, right at your fingertips.
         </p>
       </div>
 
-      {/* Location selector — static for now, not wired to real geolocation/address picker yet */}
+      {/* Location selector - static for now, not wired to real geolocation/address picker yet */}
       <button type="button" className="flex items-center gap-1.5 text-sm font-semibold text-steel">
         <MapPin className="h-4 w-4 text-brand-accent" />
         Lagos, Nigeria
       </button>
 
-      {/* Active Hub order — shows only if the client has an order in progress */}
+      {/* Active Hub order - shows only if the client has an order in progress */}
       <ActiveHubOrderBanner />
 
-      {/* Promo banner */}
-      <div className="rounded-2xl bg-brand px-5 py-4 text-white shadow-card-lg">
-        <p className="text-sm font-bold">Safe. Fast. Reliable.</p>
-        <p className="mt-1 text-xs text-white/80">Whatever you need, Crafteey delivers.</p>
-      </div>
+      {/* Promo banners - swipeable, auto-advancing, managed from the admin Banners page */}
+      <BannerCarousel />
 
       {/* Service cards */}
       <div>
@@ -225,7 +223,7 @@ export default function DashboardHomePage() {
         </div>
       </div>
 
-      {/* Recent activity — wired to real Hub orders + Rides bookings */}
+      {/* Recent activity - wired to real Hub orders + Rides bookings */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <p className="text-sm font-bold text-brand">Recent activity</p>
