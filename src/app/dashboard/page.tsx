@@ -10,6 +10,9 @@ import BannerCarousel from "@/components/home/BannerCarousel";
 import { formatNaira, HUB_ORDER_STATUS_LABELS } from "@/lib/hub/config";
 import type { HubOrderDTO } from "@/lib/hub/types";
 
+// White card in light mode, black card with a thin outline in dark mode.
+const CARD = "bg-white shadow-card dark:bg-slate-900 dark:shadow-none dark:ring-1 dark:ring-slate-800";
+
 const SERVICES = [
   {
     key: "hub",
@@ -33,7 +36,7 @@ const SERVICES = [
     sub: "Book a trusted pro",
     href: "/dashboard/technicians",
     icon: Wrench,
-    tone: "bg-brand/10 text-brand",
+    tone: "bg-brand/10 text-brand dark:bg-white/10 dark:text-white",
   },
   {
     key: "wallet",
@@ -158,7 +161,7 @@ export default function DashboardHomePage() {
 
   return (
     <div className="space-y-6">
-      {/* Header / hero */}
+      {/* Header / hero (stays yellow in both modes) */}
       <div className="rounded-3xl bg-sunshine px-5 pb-6 pt-5">
         <div className="flex items-center justify-between">
           <span className="text-lg font-extrabold text-brand">Crafteey</span>
@@ -198,11 +201,11 @@ export default function DashboardHomePage() {
       <ActiveHubOrderBanner />
 
       {/* Promo banners - swipeable, auto-advancing, managed from the admin Banners page */}
-      <BannerCarousel />
+      <BannerCarousel placement="home" />
 
       {/* Service cards */}
       <div>
-        <p className="mb-3 text-sm font-bold text-brand">Explore Crafteey</p>
+        <p className="mb-3 text-sm font-bold text-brand dark:text-white">Explore Crafteey</p>
         <div className="grid grid-cols-3 gap-2">
           {SERVICES.map((s) => {
             const Icon = s.icon;
@@ -210,12 +213,14 @@ export default function DashboardHomePage() {
               <Link
                 key={s.key}
                 href={s.href}
-                className="min-w-0 rounded-2xl bg-white p-3 shadow-card transition hover:shadow-card-lg"
+                className={`min-w-0 rounded-2xl p-3 transition hover:shadow-card-lg ${CARD}`}
               >
                 <span className={`inline-flex h-9 w-9 items-center justify-center rounded-xl ${s.tone}`}>
                   <Icon className="h-4 w-4" />
                 </span>
-                <p className="mt-2 break-words text-xs font-bold leading-tight text-brand">{s.label}</p>
+                <p className="mt-2 break-words text-xs font-bold leading-tight text-brand dark:text-white">
+                  {s.label}
+                </p>
                 <p className="mt-0.5 break-words text-[10px] leading-tight text-steel">{s.sub}</p>
               </Link>
             );
@@ -226,7 +231,7 @@ export default function DashboardHomePage() {
       {/* Recent activity - wired to real Hub orders + Rides bookings */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-bold text-brand">Recent activity</p>
+          <p className="text-sm font-bold text-brand dark:text-white">Recent activity</p>
           <Link href="/dashboard/history" className="flex items-center gap-0.5 text-xs font-semibold text-brand-accent">
             See all
           </Link>
@@ -235,11 +240,11 @@ export default function DashboardHomePage() {
         {activity === null ? (
           <div className="space-y-2">
             {[0, 1].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-white shadow-card" />
+              <div key={i} className="h-16 animate-pulse rounded-2xl bg-white shadow-card dark:bg-slate-800 dark:shadow-none" />
             ))}
           </div>
         ) : activity.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center">
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center dark:border-slate-700 dark:bg-slate-900">
             <p className="text-sm text-steel">Your recent orders and bookings will show up here.</p>
           </div>
         ) : (
@@ -248,13 +253,13 @@ export default function DashboardHomePage() {
               <Link
                 key={item.id}
                 href={item.href}
-                className="flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card transition hover:shadow-card-lg"
+                className={`flex items-center gap-3 rounded-2xl p-3 transition hover:shadow-card-lg ${CARD}`}
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-xl">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-xl dark:bg-slate-800">
                   {item.emoji}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-brand">{item.title}</p>
+                  <p className="truncate text-sm font-bold text-brand dark:text-white">{item.title}</p>
                   <p className="mt-0.5 truncate text-xs text-steel">{item.subtitle}</p>
                 </div>
                 <ChevronRight className="h-4 w-4 shrink-0 text-steel" />

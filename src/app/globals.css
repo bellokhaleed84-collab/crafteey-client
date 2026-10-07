@@ -6,11 +6,69 @@
 
 /* Sensible fallback so any page/element that forgets to set its own
    background or text color still looks intentional rather than
-   showing the browser default. Pages that already set their own
-   bg-slate-50/bg-white etc. on wrapping divs are unaffected — this
-   only fills in where nothing else applies. */
+   showing the browser default. */
 @layer base {
   body {
     @apply bg-white text-brand antialiased;
   }
 }
+
+/* =====================================================================
+   TRUE BLACK DARK MODE (only applies while the "dark" class is on <html>)
+   To remove it, delete everything below this line.
+   ===================================================================== */
+
+/* 1. Light-only classes used on screens that have no dark: colours */
+.dark .bg-slate-50 { background-color: #0B0B0B !important; }
+.dark .bg-white { background-color: #0B0B0B !important; }
+.dark .bg-slate-100 { background-color: #171717 !important; }
+.dark .bg-surface-muted { background-color: #171717 !important; }
+/* keep the little round knob on toggle switches white */
+.dark .bg-white.h-5.w-5.rounded-full { background-color: #FFFFFF !important; }
+
+.dark .border-slate-100,
+.dark .border-slate-200 { border-color: #1F1F1F !important; }
+.dark .border-slate-300 { border-color: #2A2A2A !important; }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1F1F1F !important; }
+
+/* shadows are invisible on black, so use a thin outline instead */
+.dark .shadow-card,
+.dark .shadow-card-lg { box-shadow: 0 0 0 1px #1F1F1F !important; }
+
+/* dark navy text becomes white */
+.dark .text-brand { color: #FFFFFF !important; }
+.dark [class*="text-brand/"] { color: rgba(255, 255, 255, 0.7) !important; }
+.dark .text-slate-900:not([class*="bg-yellow"]):not([class*="bg-amber"]):not([class*="bg-sunshine"]),
+.dark .text-slate-800:not([class*="bg-yellow"]):not([class*="bg-amber"]):not([class*="bg-sunshine"]) { color: #F5F5F5; }
+
+/* solid navy buttons become the blue accent so they show on black */
+.dark .bg-brand { @apply bg-brand-accent !important; }
+
+/* yellow surfaces stay yellow, so their text stays dark */
+.dark .bg-sunshine.text-brand,
+.dark .bg-sunshine .text-brand { color: #0B1530 !important; }
+.dark .bg-sunshine [class*="text-brand/"],
+.dark .bg-sunshine[class*="text-brand/"] { color: rgba(11, 21, 48, 0.7) !important; }
+
+/* 2. The app's existing dark: classes, turned from blue-grey into black */
+.dark .dark\:bg-slate-950 { background-color: #000000 !important; }
+.dark .dark\:bg-slate-900 { background-color: #0B0B0B !important; }
+.dark .dark\:bg-slate-800 { background-color: #171717 !important; }
+.dark .dark\:bg-slate-950\/95 { background-color: rgba(0, 0, 0, 0.95) !important; }
+.dark .dark\:border-slate-800 { border-color: #1F1F1F !important; }
+.dark .dark\:border-slate-700 { border-color: #2A2A2A !important; }
+.dark .dark\:ring-slate-800 { --tw-ring-color: #1F1F1F !important; }
+.dark .dark\:ring-slate-700 { --tw-ring-color: #2A2A2A !important; }
+.dark .dark\:divide-slate-800 > :not([hidden]) ~ :not([hidden]) { border-color: #1F1F1F !important; }
+
+/* 3. Gradient cards (like the profile card in More) */
+.dark .dark\:from-slate-800 {
+  --tw-gradient-from: #171717 var(--tw-gradient-from-position, );
+  --tw-gradient-to: rgb(23 23 23 / 0) var(--tw-gradient-to-position, );
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+.dark .dark\:via-slate-800 {
+  --tw-gradient-to: rgb(23 23 23 / 0) var(--tw-gradient-to-position, );
+  --tw-gradient-stops: var(--tw-gradient-from), #171717 var(--tw-gradient-via-position, ), var(--tw-gradient-to);
+}
+.dark .dark\:to-slate-900 { --tw-gradient-to: #0B0B0B var(--tw-gradient-to-position, ); }

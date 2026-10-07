@@ -14,7 +14,7 @@ const PAUSE_MS = 6000;
 
 function StaticPromo() {
   return (
-    <div className="rounded-2xl bg-brand px-5 py-4 text-white shadow-card-lg">
+    <div className="rounded-2xl bg-brand px-5 py-4 text-white shadow-card-lg dark:bg-slate-900 dark:shadow-none dark:ring-1 dark:ring-slate-800">
       <p className="text-sm font-bold">Safe. Fast. Reliable.</p>
       <p className="mt-1 text-xs text-white/80">Whatever you need, Crafteey delivers.</p>
     </div>
@@ -106,7 +106,7 @@ export default function BannerCarousel({
   if (banners === null) {
     return (
       <div
-        className="w-full animate-pulse rounded-2xl bg-slate-200"
+        className="w-full animate-pulse rounded-2xl bg-slate-200 dark:bg-slate-800"
         style={{ aspectRatio: "2 / 1" }}
         aria-busy="true"
       />
@@ -143,7 +143,9 @@ export default function BannerCarousel({
                 markTouch();
                 goTo(i);
               }}
-              className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-brand" : "w-1.5 bg-slate-300"}`}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index ? "w-5 bg-brand dark:bg-white" : "w-1.5 bg-slate-300 dark:bg-slate-700"
+              }`}
             />
           ))}
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardNav from "@/components/DashboardNav";
@@ -47,11 +48,23 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 dark:border-slate-800 dark:bg-slate-900">
-        <Link href="/dashboard" className="font-bold text-brand dark:text-white">
-          Crafteey
+      <header className="flex items-center justify-between gap-3 border-b border-slate-200 bg-white px-6 py-3 dark:border-slate-800 dark:bg-slate-900">
+        <Link href="/dashboard" aria-label="Crafteey home" className="flex items-center gap-2.5">
+          <Image
+            src="/logo.png"
+            alt=""
+            width={36}
+            height={36}
+            priority
+            className="h-9 w-9 rounded-xl"
+          />
+          <span className="text-xl font-extrabold tracking-tight text-brand dark:text-white">
+            Crafteey
+          </span>
         </Link>
-        <span className="text-sm text-slate-500 dark:text-slate-400">{client.name}</span>
+        <span className="max-w-[45%] truncate text-sm font-medium text-slate-500 dark:text-slate-400">
+          {client.name}
+        </span>
       </header>
       <main className="mx-auto max-w-2xl p-6 pb-24">{children}</main>
       <DashboardNav />
