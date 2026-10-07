@@ -4,16 +4,18 @@ import { isValidWebhookSignature } from "@/lib/paystack";
 import { settleOrderFromPaystack } from "@/lib/hub/orders";
 import { settleQuoteFromPaystack } from "@/lib/quotePayments";
 import { settleWalletTopup } from "@/lib/wallet";
+import { settleCompanyPayout } from "@/lib/companyPayouts";
 
 export const dynamic = "force-dynamic";
 
 /**
  * The ONE Paystack webhook for the whole platform. URL stays the same:
  *   https://YOUR-DOMAIN/api/hub/paystack/webhook
- * Each payment is sent to the right handler by its reference prefix:
+ * Payments are sent to the right handler by their reference prefix:
  *   hub-    Hub orders
  *   quote-  company quotations
  *   wtop-   wallet top-ups
+ *   cpay-   company withdrawals (transfer.* events)
  * Every handler re-verifies with Paystack and is safe to run more than once.
  */
 export async function POST(req: NextRequest) {
@@ -29,13 +31,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Bad payload" }, { status: 400 });
   }
 
-  if (evt.event === "charge.success" && evt.data?.reference) {
-    const reference = String(evt.data.reference);
+  const reference = evt.data?.reference ? String(evt.data.reference) : "";
+  if (reference) {
     try {
       await connectToDatabase();
-      if (reference.startsWith("hub-")) await settleOrderFromPaystack(reference);
-      else if (reference.startsWith("quote-")) await settleQuoteFromPaystack(reference);
-      else if (reference.startsWith("wtop-")) await settleWalletTopup(reference);
+      if (evt.event === "charge.success") {
+        if (reference.startsWith("hub-")) await settleOrderFromPaystack(reference);
+        else if (reference.startsWith("quote-")) await settleQuoteFromPaystack(reference);
+        else if (reference.startsWith("wtop-")) await settleWalletTopup(reference);
+      } else if (evt.event?.startsWith("transfer.") && reference.startsWith("cpay-")) {
+        await settleCompanyPayout(reference);
+      }
     } catch (e) {
       console.error("[paystack] webhook settle failed", reference, e);
       return NextResponse.json({ error: "Retry" }, { status: 500 }); // Paystack will retry
