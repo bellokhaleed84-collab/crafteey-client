@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, Check, Flag } from "lucide-react";
 import { collection, doc, limit, onSnapshot, orderBy, query, type Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/clientApp";
 import { useAuth } from "@/contexts/AuthContext";
 import { authedFetch } from "@/lib/chatApi";
 import { nairaText } from "@/lib/quoteShared";
+import { blockedNotice } from "@/lib/blockedNotice";
 import QuoteCard, { type ClientQuote } from "@/components/QuoteCard";
+import ReportSheet from "@/components/ReportSheet";
 
 type Msg = {
   id: string;
@@ -40,10 +42,11 @@ export default function ConversationPage() {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [blocked, setBlocked] = useState<string | null>(null);
+  const [blocked, setBlocked] = useState<string | null>(null); // the lock reason
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const verifiedRef = useRef(false);
 
@@ -182,12 +185,26 @@ export default function ConversationPage() {
         return;
       }
       const data = await res.json().catch(() => ({}));
-      if (data.blocked) setBlocked(data.error);
+      if (data.blocked) setBlocked(typeof data.reason === "string" ? data.reason : "unknown");
       else setSendError(data.error || "Couldn't send your message. Try again.");
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "Couldn't send your message. Try again.");
     } finally {
       setSending(false);
+    }
+  }
+
+  async function submitReport(reason: string, details: string): Promise<string | null> {
+    try {
+      const res = await authedFetch(getIdToken, "/api/chat/report", {
+        method: "POST",
+        body: JSON.stringify({ conversationId: id, reason, details }),
+      });
+      if (res.ok) return null;
+      const data = await res.json().catch(() => ({}));
+      return data.error || "Couldn't send the report. Try again.";
+    } catch (err) {
+      return err instanceof Error ? err.message : "Couldn't send the report. Try again.";
     }
   }
 
@@ -249,6 +266,7 @@ export default function ConversationPage() {
   }
 
   const quoteById = new Map(quotes.map((q) => [q.id, q]));
+  const blockedInfo = blocked ? blockedNotice(blocked) : null;
 
   return (
     <div className="fixed inset-0 z-[60] flex flex-col bg-slate-50 dark:bg-slate-950">
@@ -260,10 +278,20 @@ export default function ConversationPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-bold text-brand dark:text-white">{conv?.companyName ?? "Chat"}</p>
           {conv?.requestTitle && <p className="truncate text-xs text-steel">{conv.requestTitle}</p>}
         </div>
+        {!loadError && (
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            aria-label="Report this chat"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-steel hover:bg-slate-100 dark:hover:bg-slate-800"
+          >
+            <Flag className="h-5 w-5" />
+          </button>
+        )}
       </header>
 
       {loadError ? (
@@ -337,10 +365,22 @@ export default function ConversationPage() {
           className="space-y-2 border-t border-slate-200 bg-white p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] dark:border-slate-800 dark:bg-slate-900"
         >
           <div className="mx-auto w-full max-w-2xl space-y-2">
-            {blocked && (
-              <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-                {blocked}
-              </p>
+            {blockedInfo && (
+              <div role="alert" className="rounded-xl bg-amber-50 p-3 text-amber-800">
+                <p className="text-sm font-semibold">Message not sent</p>
+                <p className="mt-1 text-sm">{blockedInfo.title}</p>
+                <p className="mt-1 text-xs">{blockedInfo.body}</p>
+                <p className="mt-2 text-xs opacity-80">
+                  Blocked messages are never delivered. They are logged and may be reviewed by Crafteey.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBlocked(null)}
+                  className="mt-2 text-xs font-semibold underline"
+                >
+                  Edit my message
+                </button>
+              </div>
             )}
             {sendError && (
               <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
@@ -367,6 +407,8 @@ export default function ConversationPage() {
           </div>
         </form>
       )}
+
+      {reportOpen && <ReportSheet onClose={() => setReportOpen(false)} onSubmit={submitReport} />}
 
       {confirmed && (
         <div className="fixed inset-0 z-[70] flex flex-col items-center justify-center gap-4 bg-white px-6 text-center dark:bg-slate-950">
