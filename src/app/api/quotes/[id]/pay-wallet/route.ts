@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { verifyToken } from "@/middleware/auth";
-import Quote, { type IQuote } from "@/models/Quote";
+import Quote from "@/models/Quote";
 import Company from "@/models/Company";
 import { debitInSession } from "@/lib/wallet";
-import { onQuotePaid } from "@/lib/quotePayments";
+import { finalizePaidQuote } from "@/lib/quotePayments";
 import { effectiveStatus, quoteBlockMessage } from "@/lib/quoteShared";
 import { fail, handleError } from "@/lib/hub/http";
 
@@ -33,7 +33,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!companyOk) return fail("This company isn't available right now.", 409);
 
     const session = await mongoose.startSession();
-    const out: { quote?: IQuote } = {};
     try {
       await session.withTransaction(async () => {
         const debit = await debitInSession(session, {
@@ -68,7 +67,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           { new: true, session }
         );
         if (!updated) throw stop("not_payable"); // aborts, which also undoes the debit
-        out.quote = updated;
       });
     } catch (e) {
       const code = (e as { walletCode?: WalletCode } | null)?.walletCode;
@@ -79,8 +77,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await session.endSession();
     }
 
-    if (out.quote) await onQuotePaid(out.quote);
-    return NextResponse.json({ ok: true, status: "paid" });
+    // Paid for certain. If a follow-up step fails it is retried when the chat loads.
+    await finalizePaidQuote(String(quote._id)).catch((e) => console.error("[quote] finalize failed", e));
+    const fresh = await Quote.findById(quote._id).select("jobId").lean();
+    return NextResponse.json({ ok: true, status: "paid", jobId: fresh?.jobId ? String(fresh.jobId) : null });
   } catch (e) {
     return handleError(e);
   }

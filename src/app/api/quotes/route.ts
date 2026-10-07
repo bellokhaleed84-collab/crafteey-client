@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import Quote from "@/models/Quote";
 import { verifyToken, AuthError } from "@/middleware/auth";
 import { getConversationForUser } from "@/lib/chatAccess";
+import { finalizePaidQuote } from "@/lib/quotePayments";
 import { quoteView } from "@/lib/quoteShared";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,12 @@ export async function GET(req: NextRequest) {
       { conversationId, status: "sent", expiresAt: { $lt: new Date() } },
       { $set: { status: "expired", statusAt: new Date() } }
     );
+
+    // Safety net: a paid quote whose job or company credit didn't finish gets finished here.
+    const unfinished = await Quote.find({ conversationId, status: "paid", companyCreditedAt: null }).select("_id");
+    for (const q of unfinished) {
+      await finalizePaidQuote(String(q._id)).catch((e) => console.error("[quote] heal failed", e));
+    }
 
     const quotes = await Quote.find({ conversationId }).sort({ createdAt: 1 }).limit(50);
     return NextResponse.json({ quotes: quotes.map((q) => quoteView(q, role)) });

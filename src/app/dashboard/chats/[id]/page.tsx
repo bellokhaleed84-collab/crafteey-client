@@ -20,6 +20,7 @@ type Msg = {
   createdAt: Timestamp | null;
 };
 type ConvInfo = { companyName: string; requestTitle: string; unreadClient: number };
+type Confirmed = { title: string; totalKobo: number; jobId: string | null };
 
 function hhmm(ts: Timestamp | null): string {
   if (!ts) return "";
@@ -42,7 +43,7 @@ export default function ConversationPage() {
   const [blocked, setBlocked] = useState<string | null>(null);
   const [sendError, setSendError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<{ title: string; totalKobo: number } | null>(null);
+  const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const verifiedRef = useRef(false);
 
@@ -136,7 +137,7 @@ export default function ConversationPage() {
         const res = await authedFetch(getIdToken, `/api/quotes/verify?reference=${encodeURIComponent(reference)}`);
         const data = await res.json().catch(() => ({}));
         if (res.ok && data.paid && data.quote) {
-          setConfirmed({ title: data.quote.title, totalKobo: data.quote.totalKobo });
+          setConfirmed({ title: data.quote.title, totalKobo: data.quote.totalKobo, jobId: data.quote.jobId ?? null });
         } else if (res.ok && data.refundedToWallet) {
           setNotice("This quotation could no longer be paid, so your money was returned to your Crafteey wallet.");
         } else {
@@ -216,7 +217,7 @@ export default function ConversationPage() {
       const res = await authedFetch(getIdToken, `/api/quotes/${quoteId}/pay-wallet`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        if (q) setConfirmed({ title: q.title, totalKobo: q.totalKobo });
+        if (q) setConfirmed({ title: q.title, totalKobo: q.totalKobo, jobId: data.jobId ?? null });
       } else {
         setSendError(data.error || "Couldn't take the payment. Try again.");
       }
@@ -376,10 +377,22 @@ export default function ConversationPage() {
           <p className="text-4xl font-extrabold text-brand dark:text-white">{nairaText(confirmed.totalKobo)}</p>
           <p className="text-sm text-steel">{confirmed.title}</p>
           <p className="text-sm text-slate-700 dark:text-slate-300">The job is now confirmed.</p>
+          {confirmed.jobId && (
+            <Link
+              href={`/dashboard/work/${confirmed.jobId}`}
+              className="mt-4 flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl bg-brand-accent px-5 font-semibold text-white"
+            >
+              View job
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => setConfirmed(null)}
-            className="mt-4 min-h-12 w-full max-w-xs rounded-xl bg-brand-accent px-5 font-semibold text-white"
+            className={`min-h-12 w-full max-w-xs rounded-xl px-5 font-semibold ${
+              confirmed.jobId
+                ? "border border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-300"
+                : "mt-4 bg-brand-accent text-white"
+            }`}
           >
             Back to chat
           </button>

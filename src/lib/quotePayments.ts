@@ -2,14 +2,24 @@ import { FieldValue } from "firebase-admin/firestore";
 import { connectToDatabase } from "@/lib/mongodb";
 import { adminDb } from "@/lib/firebase/adminApp";
 import Quote, { type IQuote } from "@/models/Quote";
+import CompanyJob from "@/models/CompanyJob";
+import CompanyRequest from "@/models/CompanyRequest";
 import { verifyTransaction } from "@/lib/paystack";
 import { creditWallet } from "@/lib/wallet";
+import { creditCompanyWallet } from "@/lib/companyWallet";
+
+function isDuplicateKey(e: unknown): boolean {
+  return (e as { code?: number } | null)?.code === 11000;
+}
 
 /** Chat notice after a quote is paid. A failure here never undoes the payment. */
-export async function onQuotePaid(quote: IQuote) {
+async function postPaidNotice(quote: IQuote) {
   try {
     const ref = adminDb.collection("conversations").doc(quote.conversationId);
-    const text = `Payment received for "${quote.title}". The job is confirmed.`;
+    const text =
+      quote.kind === "additional"
+        ? `Payment received for additional work: "${quote.title}".`
+        : `Payment received for "${quote.title}". The job is confirmed.`;
     const batch = adminDb.batch();
     batch.set(ref.collection("messages").doc(), {
       senderUid: "system",
@@ -29,6 +39,76 @@ export async function onQuotePaid(quote: IQuote) {
   } catch (e) {
     console.error("[quote] paid notice failed", e);
   }
+}
+
+/** The job for a paid quote. A main quote makes a new job; an additional quote joins the chat's latest job. */
+async function ensureJob(quote: IQuote) {
+  const already = await CompanyJob.findOne({ quoteIds: quote._id });
+  if (already) return already;
+
+  if (quote.kind === "additional") {
+    const joined = await CompanyJob.findOneAndUpdate(
+      { conversationId: quote.conversationId, status: { $ne: "cancelled" } },
+      { $addToSet: { quoteIds: quote._id } },
+      { new: true, sort: { createdAt: -1 } }
+    );
+    if (joined) return joined;
+  }
+
+  const conv = await adminDb.collection("conversations").doc(quote.conversationId).get();
+  const clientName = String(conv.data()?.clientName || "Customer");
+  const request = await CompanyRequest.findOne({ conversationId: quote.conversationId }).select("area").lean();
+
+  try {
+    return await CompanyJob.create({
+      companyId: quote.companyId,
+      conversationId: quote.conversationId,
+      clientUid: quote.clientUid,
+      clientName,
+      mainQuoteId: quote._id,
+      quoteIds: [quote._id],
+      title: quote.title,
+      description: quote.description,
+      area: request?.area ?? "",
+      status: "confirmed",
+      workerUid: null,
+      workerName: null,
+    });
+  } catch (e) {
+    if (isDuplicateKey(e)) return CompanyJob.findOne({ mainQuoteId: quote._id });
+    throw e;
+  }
+}
+
+/**
+ * Everything that follows a successful quote payment: pay the company's wallet,
+ * make sure the job exists, tell the chat. Every step is safe to repeat, so any
+ * caller (webhook, verify, wallet payment, chat reload) can run it again.
+ */
+export async function finalizePaidQuote(quoteId: string): Promise<void> {
+  await connectToDatabase();
+  const quote = await Quote.findById(quoteId);
+  if (!quote || quote.status !== "paid") return;
+
+  await creditCompanyWallet({
+    companyId: quote.companyId,
+    amountKobo: quote.companyEarningKobo,
+    reference: `quote_earning_${quote._id}`,
+    quoteId: quote._id,
+    note: `Earnings: ${quote.title}`.slice(0, 200),
+  });
+
+  const job = await ensureJob(quote);
+  if (job && !quote.jobId) {
+    await Quote.updateOne({ _id: quote._id, jobId: { $exists: false } }, { $set: { jobId: job._id } });
+  }
+
+  // Only the first run posts the chat notice.
+  const first = await Quote.findOneAndUpdate(
+    { _id: quote._id, companyCreditedAt: null },
+    { $set: { companyCreditedAt: new Date() } }
+  );
+  if (first) await postPaidNotice(quote);
 }
 
 /** Money arrived but the quote can't take it (cancelled, declined, expired, or already paid). Goes to the wallet, once. */
@@ -57,6 +137,9 @@ export async function settleQuoteFromPaystack(reference: string) {
   const quote = await Quote.findOne({ "payment.references": reference });
   if (!quote) return { ok: false as const, reason: "quote_not_found" };
   if (quote.payment.status === "success" && quote.payment.reference === reference) {
+    if (!quote.companyCreditedAt) {
+      await finalizePaidQuote(String(quote._id)).catch((e) => console.error("[quote] finalize failed", e));
+    }
     return { ok: true as const };
   }
 
@@ -94,7 +177,9 @@ export async function settleQuoteFromPaystack(reference: string) {
     );
 
     if (updated) {
-      await onQuotePaid(updated);
+      // The customer has paid for certain. If a follow-up step fails it is retried
+      // the next time the chat loads, so we don't turn this into an error.
+      await finalizePaidQuote(String(updated._id)).catch((e) => console.error("[quote] finalize failed", e));
       return { ok: true as const };
     }
     await refundLatePayment(quote, reference, tx.amount);

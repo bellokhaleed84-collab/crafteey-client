@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { nairaText } from "@/lib/quoteShared";
 
 export type ClientQuote = {
@@ -12,6 +13,7 @@ export type ClientQuote = {
   totalKobo: number;
   expiresAt: string;
   status: "sent" | "paid" | "declined" | "cancelled" | "expired";
+  jobId?: string | null;
 };
 
 const CHIP: Record<ClientQuote["status"], { label: string; cls: string }> = {
@@ -111,9 +113,19 @@ export default function QuoteCard({
             </button>
           </div>
         ) : (
-          <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${chip.cls}`}>
-            {chip.label}
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${chip.cls}`}>
+              {chip.label}
+            </span>
+            {quote.status === "paid" && quote.jobId && (
+              <Link
+                href={`/dashboard/work/${quote.jobId}`}
+                className="rounded-lg border border-brand-accent px-3 py-1 text-xs font-semibold text-brand-accent"
+              >
+                View job
+              </Link>
+            )}
+          </div>
         )}
       </div>
     </div>
