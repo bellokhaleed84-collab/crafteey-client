@@ -14,10 +14,15 @@ export default function HomePage() {
     if (user && client) {
       router.replace("/dashboard");
     } else if (user && !client) {
-      // Signed in with Firebase but no Mongo profile yet — finish signup.
+      // Signed in with Firebase but no Mongo profile yet: finish signup.
       router.replace("/register");
     } else {
-      router.replace("/login");
+      // Not signed in: first-time visitors see the intro slides once.
+      let seen = false;
+      try {
+        seen = localStorage.getItem("crafteey_onboarded") === "1";
+      } catch {}
+      router.replace(seen ? "/login" : "/welcome");
     }
   }, [loading, user, client, router]);
 

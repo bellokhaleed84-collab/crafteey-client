@@ -1,88 +1,159 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import {
+  signInWithEmailAndPassword,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+} from "firebase/auth";
 import { auth } from "@/lib/firebase/clientApp";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  APPLE_SIGN_IN_ENABLED,
+  authErrorMessage,
+  signInWithApple,
+  signInWithGoogle,
+} from "@/lib/firebase/socialAuth";
+import {
+  AppleIcon,
+  AuthLogo,
+  Divider,
+  ErrorNote,
+  Field,
+  GoogleIcon,
+  MailIcon,
+  OptionButton,
+  PasswordField,
+  PrimaryButton,
+  Screen,
+} from "@/components/auth/AuthParts";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, client, loading, profileError } = useAuth();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [socialBusy, setSocialBusy] = useState<"google" | "apple" | null>(null);
+
+  // Once signed in (email, Google or Apple) send them where they belong.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (client) router.replace("/dashboard");
+    else if (!profileError) router.replace("/register");
+  }, [loading, user, client, profileError, router]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
-
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      router.replace("/dashboard");
-    } catch {
-      setError("Invalid email or password.");
+      await setPersistence(
+        auth,
+        remember ? browserLocalPersistence : browserSessionPersistence
+      );
+      await signInWithEmailAndPassword(auth, email.trim(), password);
+    } catch (err) {
+      setError(authErrorMessage(err) || "Invalid email or password.");
     } finally {
       setSubmitting(false);
     }
   }
 
+  async function handleSocial(kind: "google" | "apple") {
+    setError(null);
+    setSocialBusy(kind);
+    try {
+      await (kind === "google" ? signInWithGoogle() : signInWithApple());
+    } catch (err) {
+      setError(authErrorMessage(err) || null);
+    } finally {
+      setSocialBusy(null);
+    }
+  }
+
   return (
-    <div className="relative flex min-h-screen items-center justify-center px-4">
-      {/* Background image */}
-      <div
-        className="absolute inset-0 -z-10 bg-cover bg-center"
-        style={{ backgroundImage: "url('/auth-background.jpg')" }}
-      />
-      {/* Dark overlay for contrast against the white card */}
-      <div className="absolute inset-0 -z-10 bg-slate-900/40" />
+    <Screen>
+      <AuthLogo />
 
-      <div className="w-full max-w-sm rounded-2xl border border-slate-100 bg-white p-8 shadow-xl shadow-slate-900/5">
-        <h1 className="mb-1 text-xl font-bold text-brand">Crafteey</h1>
-        <p className="mb-6 text-sm text-slate-500">Welcome back.</p>
+      <h1 className="mt-10 text-2xl font-bold text-[#4002AF] dark:text-white">Welcome Back</h1>
+      <p className="mt-1 text-sm text-slate-500">Log in to your account</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Email</label>
+      <form onSubmit={handleSubmit} className="mt-7 space-y-3.5">
+        <Field
+          label="Email"
+          icon={<MailIcon />}
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={setEmail}
+        />
+        <PasswordField
+          label="Password"
+          required
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={setPassword}
+        />
+
+        <div className="flex items-center justify-between pt-1">
+          <label className="flex items-center gap-2 text-xs text-slate-600">
             <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30"
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 rounded accent-[#4002AF]"
             />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-slate-700">Password</label>
-            <input
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-brand-accent focus:ring-2 focus:ring-brand-accent/30"
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-600">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-light disabled:opacity-50"
-          >
-            {submitting ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-center text-sm text-slate-500">
-          New to Crafteey?{" "}
-          <Link href="/register" className="font-semibold text-brand underline underline-offset-2">
-            Create an account
+            Remember me
+          </label>
+          <Link href="/forgot-password" className="text-xs font-semibold text-amber-600">
+            Forgot Password?
           </Link>
-        </p>
+        </div>
+
+        <ErrorNote message={error} />
+
+        <PrimaryButton type="submit" loading={submitting}>
+          Log In
+        </PrimaryButton>
+      </form>
+
+      <div className="my-5">
+        <Divider />
       </div>
-    </div>
+
+      <div className="space-y-3">
+        <OptionButton
+          icon={<GoogleIcon />}
+          label="Continue with Google"
+          loading={socialBusy === "google"}
+          onClick={() => handleSocial("google")}
+        />
+        {APPLE_SIGN_IN_ENABLED && (
+          <OptionButton
+            icon={<AppleIcon />}
+            label="Continue with Apple"
+            loading={socialBusy === "apple"}
+            onClick={() => handleSocial("apple")}
+          />
+        )}
+      </div>
+
+      <p className="mt-auto pt-8 text-center text-sm text-slate-500">
+        Don&apos;t have an account?{" "}
+        <Link href="/register" className="font-semibold text-amber-600">
+          Sign Up
+        </Link>
+      </p>
+    </Screen>
   );
 }
