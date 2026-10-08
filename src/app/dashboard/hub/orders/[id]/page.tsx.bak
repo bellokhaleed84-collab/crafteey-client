@@ -297,7 +297,6 @@ export default function OrderPage() {
                     pickup={pickupCoords}
                     dropoff={dropoffCoords}
                     courierLocation={courierMapLocation}
-                    stage={courier.status === "accepted" ? "to_pickup" : "to_dropoff"}
                     className="h-[220px] w-full rounded-xl border border-slate-100"
                   />
                   {liveLocation?.live && (

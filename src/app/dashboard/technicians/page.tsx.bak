@@ -374,12 +374,7 @@ export default function TechniciansPage() {
         {companies?.map((c) => {
           const chat = chatsByCompany[c._id];
           return (
-            <div key={c._id} className="relative rounded-2xl border border-slate-100 bg-white p-4 shadow-card transition active:scale-[0.99]">
-              <Link
-                href={`/dashboard/technicians/${c._id}`}
-                aria-label={`View ${c.businessName}`}
-                className="absolute inset-0 z-0 rounded-2xl"
-              />
+            <div key={c._id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-card">
               <div className="flex items-start gap-3">
                 {c.logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -413,7 +408,7 @@ export default function TechniciansPage() {
                         type="button"
                         onClick={() => setReviewsFor(c)}
                         aria-label={`See ${c.ratingCount} ${c.ratingCount === 1 ? "review" : "reviews"} for ${c.businessName}`}
-                        className="relative z-10 -my-2 py-2 font-semibold text-brand underline underline-offset-2"
+                        className="-my-2 py-2 font-semibold text-brand underline underline-offset-2"
                       >
                         {`\u2605 ${c.rating.toFixed(1)} (${c.ratingCount})`}
                       </button>
@@ -430,12 +425,15 @@ export default function TechniciansPage() {
                 </div>
               </div>
               {c.description && <p className="mt-3 line-clamp-2 text-sm text-steel">{c.description}</p>}
+              <Link href={`/dashboard/technicians/${c._id}`} className="mt-2 inline-block text-sm font-semibold text-brand-accent underline underline-offset-2">
+                View profile
+              </Link>
 
               {chat ? (
                 <div className="mt-3 flex gap-2">
                   <Link
                     href={`/dashboard/chats/${chat.id}`}
-                    className="relative z-10 flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-brand-accent px-4 text-sm font-bold text-white transition hover:bg-brand-accentDark"
+                    className="relative flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-brand-accent px-4 text-sm font-bold text-white transition hover:bg-brand-accentDark"
                   >
                     <MessageCircle className="h-4 w-4" />
                     Open chat
@@ -447,7 +445,7 @@ export default function TechniciansPage() {
                   </Link>
                   <button
                     onClick={() => setSelected(c)}
-                    className="relative z-10 min-h-11 shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-brand"
+                    className="min-h-11 shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-brand"
                   >
                     New request
                   </button>
@@ -455,7 +453,7 @@ export default function TechniciansPage() {
               ) : (
                 <button
                   onClick={() => setSelected(c)}
-                  className="relative z-10 mt-3 w-full rounded-xl bg-sunshine px-4 py-2.5 text-sm font-bold text-brand transition hover:bg-sunshine-light"
+                  className="mt-3 w-full rounded-xl bg-sunshine px-4 py-2.5 text-sm font-bold text-brand transition hover:bg-sunshine-light"
                 >
                   Request this company
                 </button>
