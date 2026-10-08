@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, AuthError } from "@/middleware/auth";
 import { connectToDatabase } from "@/lib/mongodb";
 import Client from "@/models/Client";
+import { isAvatarKey } from "@/lib/avatars";
 
 export async function GET(req: NextRequest) {
   try {
@@ -24,24 +25,23 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// Updates the caller's own client profile — used by the new editable
-// Profile settings page (name/phone) and Preferences page
-// (notifyEmail/notifyPush/language), plus saved addresses. Email is
-// intentionally NOT editable here — changing the Firebase auth email needs
-// re-authentication and goes through Firebase's client SDK directly, not
-// this endpoint.
+// Updates the caller's own client profile: name/phone, preferences
+// (notifyEmail/notifyPush/language), avatar, and saved addresses. Email is
+// intentionally NOT editable here: changing the Firebase auth email needs
+// re-authentication and goes through Firebase's client SDK directly.
 export async function PATCH(req: NextRequest) {
   try {
     const { uid } = await verifyToken(req);
     await connectToDatabase();
 
     const body = await req.json().catch(() => ({}));
-    const { name, phone, notifyEmail, notifyPush, language, addresses } = body as {
+    const { name, phone, notifyEmail, notifyPush, language, addresses, avatar } = body as {
       name?: string;
       phone?: string;
       notifyEmail?: boolean;
       notifyPush?: boolean;
       language?: string;
+      avatar?: unknown;
       addresses?: { label?: unknown; address?: unknown }[];
     };
 
@@ -51,6 +51,15 @@ export async function PATCH(req: NextRequest) {
     if (typeof notifyEmail === "boolean") update.notifyEmail = notifyEmail;
     if (typeof notifyPush === "boolean") update.notifyPush = notifyPush;
     if (typeof language === "string" && language.trim()) update.language = language.trim();
+
+    // Avatar: one of the 10 built-in keys, or "" to go back to initials.
+    if (avatar !== undefined) {
+      if (avatar === "" || isAvatarKey(avatar)) {
+        update.avatar = avatar;
+      } else {
+        return NextResponse.json({ error: "That avatar isn't available." }, { status: 400 });
+      }
+    }
 
     // Saved addresses: capped at 10, each trimmed and length-limited.
     // Entries missing a label or address are dropped.

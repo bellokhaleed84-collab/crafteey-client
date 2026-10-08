@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Mail, Pencil, Phone, User, ChevronRight, BadgeCheck } from "lucide-react";
+import { KeyRound, Mail, Pencil, Phone, User, ChevronRight, BadgeCheck, Smile } from "lucide-react";
 import {
   EmailAuthProvider,
   reauthenticateWithCredential,
@@ -11,6 +11,8 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { auth } from "@/lib/firebase/clientApp";
 import SettingsHeader from "@/components/SettingsHeader";
+import Avatar from "@/components/Avatar";
+import AvatarPicker from "@/components/AvatarPicker";
 
 const CARD =
   "overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900";
@@ -43,6 +45,10 @@ export default function ProfileSettingsPage() {
   const [savingBasics, setSavingBasics] = useState(false);
   const [basicsError, setBasicsError] = useState<string | null>(null);
 
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
   const [changingEmail, setChangingEmail] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -50,6 +56,28 @@ export default function ProfileSettingsPage() {
   const [emailError, setEmailError] = useState<string | null>(null);
 
   const [resetStatus, setResetStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+
+  async function handleSelectAvatar(key: string) {
+    setAvatarError(null);
+    setSavingAvatar(true);
+    try {
+      const token = await getIdToken();
+      const res = await fetch("/api/clients/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ avatar: key }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Couldn't save your avatar.");
+      }
+      await refetchClient();
+    } catch (err: any) {
+      setAvatarError(err.message || "Couldn't save your avatar.");
+    } finally {
+      setSavingAvatar(false);
+    }
+  }
 
   async function handleSaveBasics() {
     setBasicsError(null);
@@ -108,23 +136,17 @@ export default function ProfileSettingsPage() {
     }
   }
 
-  const initials =
-    (client?.name ?? "")
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase())
-      .join("") || "C";
-
   return (
     <div className="space-y-6">
       <SettingsHeader title="My Profile" subtitle="View and edit your personal information." />
 
       {/* Identity card */}
       <div className="flex items-center gap-4 rounded-2xl bg-gradient-to-br from-yellow-100 via-yellow-50 to-amber-50 p-4 ring-1 ring-yellow-200/60 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 dark:ring-slate-700">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xl font-extrabold text-slate-900 ring-4 ring-white/80 dark:ring-slate-700">
-          {initials}
-        </span>
+        <Avatar
+          avatarKey={client?.avatar}
+          name={client?.name}
+          className="h-16 w-16 ring-4 ring-white/80 dark:ring-slate-700"
+        />
         <div className="min-w-0">
           <p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">{client?.name}</p>
           <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-brand-accent dark:bg-slate-700">
@@ -133,6 +155,33 @@ export default function ProfileSettingsPage() {
           </span>
         </div>
       </div>
+
+      {/* Avatar */}
+      <section className="space-y-3">
+        <SectionTitle>Avatar</SectionTitle>
+        <div className={`${CARD} p-4`}>
+          {!avatarOpen ? (
+            <button
+              onClick={() => setAvatarOpen(true)}
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-brand-accent transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+            >
+              <Smile className="h-4 w-4" />
+              Change avatar
+            </button>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Pick an avatar. It saves as soon as you tap it.
+              </p>
+              <AvatarPicker value={client?.avatar} saving={savingAvatar} onSelect={handleSelectAvatar} />
+              {avatarError && <p className="text-sm text-red-600 dark:text-red-400">{avatarError}</p>}
+              <button onClick={() => setAvatarOpen(false)} className={`${BTN_GHOST} w-full`}>
+                Done
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* Basics */}
       <section className="space-y-3">
@@ -163,7 +212,7 @@ export default function ProfileSettingsPage() {
                   Cancel
                 </button>
                 <button onClick={handleSaveBasics} disabled={savingBasics} className={BTN_PRIMARY}>
-                  {savingBasics ? "Saving…" : "Save changes"}
+                  {savingBasics ? "Saving..." : "Save changes"}
                 </button>
               </div>
             </div>
@@ -264,7 +313,7 @@ export default function ProfileSettingsPage() {
                   disabled={emailStatus === "sending" || !newEmail || !currentPassword}
                   className={BTN_PRIMARY}
                 >
-                  {emailStatus === "sending" ? "Sending…" : "Send verification"}
+                  {emailStatus === "sending" ? "Sending..." : "Send verification"}
                 </button>
               </div>
             </div>
@@ -293,7 +342,7 @@ export default function ProfileSettingsPage() {
                     : resetStatus === "error"
                     ? "Couldn't send the link. Try again."
                     : resetStatus === "sending"
-                    ? "Sending…"
+                    ? "Sending..."
                     : "We'll email you a reset link."}
                 </p>
               </div>

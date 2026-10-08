@@ -8,6 +8,7 @@ export interface IClient extends Document {
   notifyEmail: boolean;
   notifyPush: boolean;
   language: string;
+  avatar: string;
   addresses: { label: string; address: string }[];
   createdAt: Date;
   updatedAt: Date;
@@ -24,6 +25,8 @@ const ClientSchema = new Schema<IClient>(
     notifyEmail: { type: Boolean, default: true },
     notifyPush: { type: Boolean, default: true },
     language: { type: String, default: "en" },
+    // One of avatar-1 .. avatar-10, or "" to show the initials.
+    avatar: { type: String, default: "" },
     // Saved pickup/delivery addresses (Settings > Saved Addresses).
     // Existing clients without this field just read back as [].
     addresses: {

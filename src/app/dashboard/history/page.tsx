@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Bike, Wrench, Clock, PackageOpen } from "lucide-react";
+import Link from "next/link";
+import { Bike, Wrench, Clock, PackageOpen, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { JOB_STATUS, COURIER_STATUS } from "@/lib/constants";
 import { SkeletonList } from "@/components/ui/Skeleton";
@@ -54,7 +55,7 @@ function formatWhen(iso: string) {
   const d = new Date(iso);
   const date = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  return `${date} · ${time}`;
+  return `${date}, ${time}`;
 }
 
 function dayLabel(iso: string) {
@@ -76,6 +77,10 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "courier", label: "Rides" },
   { key: "job", label: "Technicians" },
 ];
+
+function hrefFor(item: FeedItem) {
+  return item.type === "job" ? `/dashboard/jobs/${item._id}` : `/dashboard/deliveries/${item._id}`;
+}
 
 export default function HistoryPage() {
   const { getIdToken } = useAuth();
@@ -111,7 +116,7 @@ export default function HistoryPage() {
           _id: c._id,
           type: "courier" as const,
           title: "Courier delivery",
-          subtitle: `${c.pickup} → ${c.dropoff}`,
+          subtitle: `${c.pickup} to ${c.dropoff}`,
           status: c.status,
           createdAt: c.createdAt,
         })),
@@ -146,7 +151,7 @@ export default function HistoryPage() {
     <div className="space-y-5">
       <div>
         <h1 className="text-lg font-bold text-brand">History</h1>
-        <p className="text-sm text-steel">Your rides and technician jobs, in one place.</p>
+        <p className="text-sm text-steel">Your rides and technician jobs, in one place. Tap one for details.</p>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -194,8 +199,9 @@ export default function HistoryPage() {
                 const Icon = item.type === "job" ? Wrench : Bike;
                 const status = STATUS_STYLE[statusKeyFor(item.status)];
                 return (
-                  <div
+                  <Link
                     key={`${item.type}-${item._id}`}
+                    href={hrefFor(item)}
                     className="flex gap-3 rounded-2xl bg-white p-4 shadow-card transition active:scale-[0.99]"
                   >
                     <div
@@ -223,7 +229,8 @@ export default function HistoryPage() {
                       </div>
                       <p className="mt-2 text-xs text-steel">{formatWhen(item.createdAt)}</p>
                     </div>
-                  </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 self-center text-slate-300" />
+                  </Link>
                 );
               })}
             </div>

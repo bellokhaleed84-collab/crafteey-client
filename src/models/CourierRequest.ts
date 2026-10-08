@@ -24,7 +24,7 @@ const CourierRequestSchema = new Schema(
 
     // Rider payout for this delivery, in kobo. Set at creation time for
     // both direct bookings and Hub orders so the rider sees it before
-    // accepting — not calculated after the fact.
+    // accepting - not calculated after the fact.
     riderEarningKobo: { type: Number, default: null },
 
     source: { type: String, enum: ["direct", "hub"], default: "direct", index: true },
@@ -49,6 +49,11 @@ const CourierRequestSchema = new Schema(
       type: new Schema({ lat: Number, lng: Number }, { _id: false }),
       default: null,
     },
+
+    // Stage times. The rider app must set these when it changes the status.
+    acceptedAt: { type: Date, default: null },
+    pickedUpAt: { type: Date, default: null },
+    deliveredAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

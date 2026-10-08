@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useI18n } from "@/contexts/I18nContext";
+import Avatar from "@/components/Avatar";
 import {
   User,
   CreditCard,
@@ -154,14 +155,6 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const initials =
-    (client?.name ?? "")
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase())
-      .join("") || "C";
-
   async function handleSignOut() {
     await signOut();
     router.replace("/login");
@@ -198,9 +191,11 @@ export default function SettingsPage() {
         href="/dashboard/settings/profile"
         className="relative flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-br from-yellow-100 via-yellow-50 to-amber-50 p-4 shadow-sm ring-1 ring-yellow-200/60 dark:from-slate-800 dark:via-slate-800 dark:to-slate-900 dark:ring-slate-700"
       >
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-yellow-400 text-xl font-extrabold text-slate-900 ring-4 ring-white/80 dark:ring-slate-700">
-          {initials}
-        </span>
+        <Avatar
+          avatarKey={client?.avatar}
+          name={client?.name}
+          className="h-16 w-16 ring-4 ring-white/80 dark:ring-slate-700"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-bold text-slate-900 dark:text-slate-100">
             {client?.name ?? "Your account"}

@@ -13,6 +13,7 @@ export interface ClientProfile {
   notifyEmail?: boolean;
   notifyPush?: boolean;
   language?: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
