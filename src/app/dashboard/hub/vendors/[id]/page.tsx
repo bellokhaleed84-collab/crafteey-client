@@ -4,9 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Clock, MapPin, Minus, Plus, Star, ShoppingBag, X } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCart, type NewCartItem } from "@/contexts/CartContext";
+import { authedFetch } from "@/lib/chatApi";
 import { formatNaira } from "@/lib/hub/config";
 import { hasOptions, priceSelection, type OptionGroup, type Selection } from "@/lib/hub/options";
+import ReviewsSheet from "@/components/ReviewsSheet";
+import RatingSheet from "@/components/RatingSheet";
 
 // White card in light mode, black card with a thin outline in dark mode.
 const CARD = "bg-white shadow-card dark:bg-slate-900 dark:shadow-none dark:ring-1 dark:ring-slate-800";
@@ -348,6 +352,7 @@ function FoodSheet({
 
 export default function VendorPage() {
   const { id } = useParams<{ id: string }>();
+  const { getIdToken } = useAuth();
   const { addItem, replaceWith, setQuantity, quantityOf, count, subtotalKobo, hydrated } = useCart();
 
   const [vendor, setVendor] = useState<VendorDTO | null>(null);
@@ -361,6 +366,11 @@ export default function VendorPage() {
     currentVendorName: string;
   } | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Reviews
+  const [reviewsOpen, setReviewsOpen] = useState(false);
+  const [rateOrderId, setRateOrderId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -376,7 +386,8 @@ export default function VendorPage() {
         setProducts(d.products);
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Couldn't load this vendor");
+        // A failed refresh (after a new review) keeps the page as it is.
+        if (!cancelled && reloadKey === 0) setError(e instanceof Error ? e.message : "Couldn't load this vendor");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -384,7 +395,7 @@ export default function VendorPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   const sections = useMemo(
     () => Array.from(new Set(products.map((p) => p.menuSection).filter((s): s is string => !!s))),
@@ -432,6 +443,23 @@ export default function VendorPage() {
     const r = addItem(item, plates);
     setSelectedId(null);
     if (r.ok === false) setConflict({ item, quantity: plates, currentVendorName: r.currentVendorName });
+  }
+
+  // Sends the review for one delivered order. The server checks it is really theirs.
+  async function submitVendorReview(rating: number, comment: string): Promise<string | null> {
+    if (!rateOrderId) return "Order not found.";
+    try {
+      const res = await authedFetch(getIdToken, `/api/hub/orders/${rateOrderId}/review`, {
+        method: "POST",
+        body: JSON.stringify({ rating, comment }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return data.error || "Couldn't send your review. Try again.";
+      setReloadKey((k) => k + 1); // refresh the stars and count
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : "Couldn't send your review. Try again.";
+    }
   }
 
   if (loading) {
@@ -483,19 +511,27 @@ export default function VendorPage() {
           <h2 className="text-xl font-extrabold leading-tight text-brand dark:text-white">{vendor.name}</h2>
           {vendor.tagline && <p className="text-xs font-medium text-steel">{vendor.tagline}</p>}
 
-          <p className="flex items-center gap-1.5 text-sm font-bold text-brand dark:text-white">
+          {/* Tap the rating to read reviews (and write one if you have a delivered order) */}
+          <button
+            type="button"
+            onClick={() => setReviewsOpen(true)}
+            aria-label={`Reviews for ${vendor.name}`}
+            className="-my-1 flex min-h-9 items-center gap-1.5 py-1 text-left text-sm font-bold text-brand dark:text-white"
+          >
             <Star className="h-4 w-4 fill-sunshine text-sunshine" />
             {vendor.rating ? (
               <>
                 {vendor.rating.toFixed(1)}
-                <span className="font-medium text-steel">
+                <span className="font-medium text-steel underline underline-offset-2">
                   ({vendor.reviewCount} {vendor.reviewCount === 1 ? "review" : "reviews"})
                 </span>
               </>
             ) : (
-              <span className="font-medium text-steel">{"New \u00B7 no reviews yet"}</span>
+              <span className="font-medium text-steel underline underline-offset-2">
+                {"New \u00B7 no reviews yet"}
+              </span>
             )}
-          </p>
+          </button>
 
           <p className="flex items-center gap-1.5 text-xs font-semibold text-brand dark:text-white">
             <Clock className="h-3.5 w-3.5 shrink-0" />
@@ -699,6 +735,31 @@ export default function VendorPage() {
           onMinusPlain={() => setQuantity(selected._id, quantityOf(selected._id) - 1)}
           onAddConfigured={(selections, plates) => addConfigured(selected, selections, plates)}
           onClose={() => setSelectedId(null)}
+        />
+      )}
+
+      {/* Reviews: read them, and write one if you have a delivered order from this shop */}
+      {reviewsOpen && (
+        <ReviewsSheet
+          endpoint={`/api/hub/vendors/${vendor._id}/reviews`}
+          companyName={vendor.name}
+          rating={vendor.rating ?? 0}
+          ratingCount={vendor.reviewCount}
+          onClose={() => setReviewsOpen(false)}
+          onWrite={(orderId) => {
+            setReviewsOpen(false);
+            setRateOrderId(orderId);
+          }}
+        />
+      )}
+
+      {rateOrderId && (
+        <RatingSheet
+          title={`Rate ${vendor.name}`}
+          subtitle="How was your order?"
+          maxLength={300}
+          onClose={() => setRateOrderId(null)}
+          onSubmit={submitVendorReview}
         />
       )}
     </div>

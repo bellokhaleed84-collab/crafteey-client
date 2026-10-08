@@ -15,11 +15,17 @@ type ReviewItem = {
 };
 
 type Props = {
-  companyId: string;
+  /** For a technician company. Ignored when `endpoint` is given. */
+  companyId?: string;
+  /** Full reviews URL, for example a shop's. */
+  endpoint?: string;
+  /** Name shown at the top (company or shop). */
   companyName: string;
   rating: number;
   ratingCount: number;
   onClose: () => void;
+  /** Shows a "Write a review" button when the server says this person can review. */
+  onWrite?: (ref: string) => void;
 };
 
 function day(iso: string): string {
@@ -51,22 +57,32 @@ function ReviewSkeleton() {
   );
 }
 
-export default function ReviewsSheet({ companyId, companyName, rating, ratingCount, onClose }: Props) {
+export default function ReviewsSheet({
+  companyId,
+  endpoint,
+  companyName,
+  rating,
+  ratingCount,
+  onClose,
+  onWrite,
+}: Props) {
   const { getIdToken } = useAuth();
+  const url = endpoint ?? `/api/companies/${companyId}/reviews`;
   const [reviews, setReviews] = useState<ReviewItem[] | null>(null);
   const [nextBefore, setNextBefore] = useState<string | null>(null);
+  const [canWrite, setCanWrite] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
   const fetchPage = useCallback(
     async (before: string | null) => {
       const qs = before ? `?before=${encodeURIComponent(before)}` : "";
-      const res = await authedFetch(getIdToken, `/api/companies/${companyId}/reviews${qs}`);
+      const res = await authedFetch(getIdToken, `${url}${qs}`);
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Couldn't load reviews.");
-      return data as { reviews: ReviewItem[]; nextBefore: string | null };
+      return data as { reviews: ReviewItem[]; nextBefore: string | null; canReview?: string | null };
     },
-    [companyId, getIdToken]
+    [url, getIdToken]
   );
 
   useEffect(() => {
@@ -77,6 +93,7 @@ export default function ReviewsSheet({ companyId, companyName, rating, ratingCou
         if (cancelled) return;
         setReviews(data.reviews);
         setNextBefore(data.nextBefore);
+        setCanWrite(data.canReview ?? null);
         setError(null);
       } catch (e) {
         if (cancelled) return;
@@ -104,8 +121,9 @@ export default function ReviewsSheet({ companyId, companyName, rating, ratingCou
   }
 
   return (
+    // z-[60] so the sheet sits above the bottom nav (z-50).
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/50"
+      className="fixed inset-0 z-[60] flex items-end bg-black/50"
       role="dialog"
       aria-modal="true"
       aria-label={`Reviews for ${companyName}`}
@@ -135,7 +153,17 @@ export default function ReviewsSheet({ companyId, companyName, rating, ratingCou
           </button>
         </div>
 
-        <div className="space-y-3 overflow-y-auto p-5">
+        <div className="space-y-3 overflow-y-auto p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          {canWrite && onWrite && (
+            <button
+              type="button"
+              onClick={() => onWrite(canWrite)}
+              className="min-h-12 w-full rounded-xl bg-sunshine px-5 text-sm font-extrabold text-brand"
+            >
+              Write a review
+            </button>
+          )}
+
           {error && !reviews && (
             <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
               {error}
@@ -175,14 +203,15 @@ export default function ReviewsSheet({ companyId, companyName, rating, ratingCou
             </p>
           )}
 
-          {nextBefore && (
+          {loadingMore && <ReviewSkeleton />}
+
+          {nextBefore && !loadingMore && (
             <button
               type="button"
               onClick={() => void loadMore()}
-              disabled={loadingMore}
-              className="min-h-11 w-full rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200"
+              className="min-h-11 w-full rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 dark:border-slate-700 dark:text-slate-200"
             >
-              {loadingMore ? "Loading..." : "Load more"}
+              Load more
             </button>
           )}
         </div>

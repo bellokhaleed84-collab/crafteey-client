@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, Heart, SlidersHorizontal, UtensilsCrossed, ShoppingBasket, CupSoda, Store } from "lucide-react";
+import {
+  Search,
+  Heart,
+  SlidersHorizontal,
+  UtensilsCrossed,
+  ShoppingBasket,
+  CupSoda,
+  Store,
+  X,
+} from "lucide-react";
 import { formatNaira } from "@/lib/hub/config";
 import type { HubProduct, HubVendorDTO } from "@/lib/hub/types";
 import BannerCarousel from "@/components/home/BannerCarousel";
@@ -29,17 +38,45 @@ const QUICK_CATEGORIES = [
 
 const FILTER_TABS = ["All", "Local", "Fast Food", "Drinks", "Desserts"];
 
+type VendorRow = HubVendorDTO & { distanceKm?: number | null };
+
+type Filters = { openNow: boolean; nearMe: boolean; topRated: boolean; fast: boolean };
+const NO_FILTERS: Filters = { openNow: false, nearMe: false, topRated: false, fast: false };
+
+const FILTER_ROWS: { key: keyof Filters; label: string; sub: string }[] = [
+  { key: "openNow", label: "Open now", sub: "Only shops that are open right now" },
+  { key: "nearMe", label: "Near me", sub: "Closest first (uses your location)" },
+  { key: "topRated", label: "Top rated", sub: "4.0 stars and above" },
+  { key: "fast", label: "Fast delivery", sub: "Under 30 minutes" },
+];
+
 function formatReviews(n?: number) {
   if (!n) return "";
   return n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, "")}k+` : `${n}+`;
 }
 
-function formatMeta(r: HubVendorDTO) {
+function formatMeta(r: VendorRow) {
   const parts: string[] = [];
   if (r.rating) parts.push(`\u2B50 ${r.rating}${r.reviewCount ? ` (${formatReviews(r.reviewCount)})` : ""}`);
   if (r.etaMin && r.etaMax) parts.push(`${r.etaMin}-${r.etaMax} mins`);
+  if (typeof r.distanceKm === "number") parts.push(`${r.distanceKm} km away`);
   if (!r.isOpen) parts.push("Closed");
   return parts.join(" \u00B7 ");
+}
+
+// Asks the phone where it is. Rejects if the person says no or it takes too long.
+function getPosition(): Promise<{ lat: number; lng: number }> {
+  return new Promise((resolve, reject) => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      reject(new Error("no geolocation"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      (e) => reject(e),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  });
 }
 
 // Shown when there are no Hub banners switched on in the admin.
@@ -52,26 +89,155 @@ function DefaultHubBanner() {
   );
 }
 
+function FilterSheet({
+  initial,
+  busy,
+  onApply,
+  onClose,
+}: {
+  initial: Filters;
+  busy: boolean;
+  onApply: (f: Filters) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<Filters>(initial);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    // z-[60] so the sheet sits above the bottom nav (z-50).
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Filter shops"
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-[85dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-slate-900"
+      >
+        <div className="flex items-center justify-between px-5 pb-2 pt-5">
+          <p className="text-lg font-extrabold text-brand dark:text-white">Filter</p>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-muted text-brand dark:bg-slate-800 dark:text-white"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 pb-4">
+          {FILTER_ROWS.map((row) => {
+            const on = draft[row.key];
+            return (
+              <button
+                key={row.key}
+                type="button"
+                role="switch"
+                aria-checked={on}
+                onClick={() => setDraft((d) => ({ ...d, [row.key]: !d[row.key] }))}
+                className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl border p-3 text-left ${
+                  on ? "border-brand-accent bg-brand-accent/10" : "border-slate-200 dark:border-slate-700"
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-bold text-brand dark:text-white">{row.label}</span>
+                  <span className="block text-xs text-steel">{row.sub}</span>
+                </span>
+                <span
+                  className={`flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition ${
+                    on ? "bg-brand-accent" : "bg-slate-300 dark:bg-slate-600"
+                  }`}
+                >
+                  <span
+                    className={`h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                      on ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex shrink-0 gap-3 border-t border-slate-100 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setDraft(NO_FILTERS)}
+            disabled={busy}
+            className="h-12 rounded-xl border border-slate-200 px-5 text-sm font-bold text-steel disabled:opacity-50 dark:border-slate-700"
+          >
+            Reset
+          </button>
+          <button
+            type="button"
+            onClick={() => onApply(draft)}
+            disabled={busy}
+            className="h-12 flex-1 rounded-xl bg-sunshine text-sm font-extrabold text-brand disabled:opacity-60"
+          >
+            {busy ? "Finding your location\u2026" : "Show results"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HubPage() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
-  const [restaurants, setRestaurants] = useState<HubVendorDTO[] | null>(null);
+  const [restaurants, setRestaurants] = useState<VendorRow[] | null>(null);
   const [picks, setPicks] = useState<HubProduct[] | null>(null);
+
+  // Filter sheet
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const activeCount = Object.values(filters).filter(Boolean).length;
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 300);
     return () => clearTimeout(t);
   }, [query]);
 
+  // Restaurants: refetch when the search or any filter changes.
   useEffect(() => {
     let cancelled = false;
-    const q = debounced ? `&q=${encodeURIComponent(debounced)}` : "";
+    const params = new URLSearchParams({ category: "food" });
+    if (debounced) params.set("q", debounced);
+    if (filters.openNow) params.set("openOnly", "true");
+    if (filters.topRated) params.set("minRating", "4");
+    if (filters.fast) params.set("maxEta", "30");
+    if (filters.nearMe && coords) {
+      params.set("lat", String(coords.lat));
+      params.set("lng", String(coords.lng));
+      params.set("sort", "nearest");
+    }
 
-    fetch(`/api/hub/vendors?category=food${q}`)
+    fetch(`/api/hub/vendors?${params.toString()}`)
       .then((r) => r.json())
       .then((d) => !cancelled && setRestaurants(d.vendors ?? []))
       .catch(() => !cancelled && setRestaurants([]));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debounced, filters, coords]);
+
+  // Marketplace picks only follow the search.
+  useEffect(() => {
+    let cancelled = false;
+    const q = debounced ? `&q=${encodeURIComponent(debounced)}` : "";
 
     fetch(`/api/hub/products?category=marketplace&limit=3${q}`)
       .then((r) => r.json())
@@ -82,6 +248,24 @@ export default function HubPage() {
       cancelled = true;
     };
   }, [debounced]);
+
+  async function applyFilters(next: Filters) {
+    setNotice(null);
+    let final = next;
+    if (next.nearMe && !coords) {
+      setLocating(true);
+      try {
+        setCoords(await getPosition());
+      } catch {
+        final = { ...next, nearMe: false };
+        setNotice("Couldn't get your location. Allow location for this app and try Near me again.");
+      } finally {
+        setLocating(false);
+      }
+    }
+    setFilters(final);
+    setFilterOpen(false);
+  }
 
   const visibleRestaurants = (restaurants ?? []).filter(
     (r) =>
@@ -108,11 +292,23 @@ export default function HubPage() {
         <button
           type="button"
           aria-label="Filter"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sunshine text-brand"
+          onClick={() => setFilterOpen(true)}
+          className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sunshine text-brand"
         >
           <SlidersHorizontal className="h-4 w-4" />
+          {activeCount > 0 && (
+            <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-accent px-1 text-[10px] font-bold text-white">
+              {activeCount}
+            </span>
+          )}
         </button>
       </div>
+
+      {notice && (
+        <p className="rounded-2xl bg-amber-50 p-3 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200">
+          {notice}
+        </p>
+      )}
 
       {/* Category shortcuts - each opens its own page and shows only that category */}
       <div className="grid grid-cols-4 gap-2.5">
@@ -158,6 +354,24 @@ export default function HubPage() {
             See all
           </Link>
         </div>
+
+        {activeCount > 0 && (
+          <div className="mb-3 flex items-center justify-between text-xs text-steel">
+            <span>
+              {restaurants
+                ? `${visibleRestaurants.length} ${visibleRestaurants.length === 1 ? "shop" : "shops"} found`
+                : ""}
+            </span>
+            <button
+              type="button"
+              onClick={() => setFilters(NO_FILTERS)}
+              className="font-semibold text-brand-accent"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
         <div className="space-y-3">
           {restaurants === null ? (
             [0, 1, 2].map((i) => (
@@ -165,7 +379,11 @@ export default function HubPage() {
             ))
           ) : visibleRestaurants.length === 0 ? (
             <p className={`rounded-2xl p-4 text-center text-xs text-steel ${CARD}`}>
-              {debounced ? `No restaurants match \u201C${debounced}\u201D.` : "No restaurants here yet."}
+              {debounced
+                ? `No restaurants match \u201C${debounced}\u201D.`
+                : activeCount > 0
+                ? "No shops match your filters."
+                : "No restaurants here yet."}
             </p>
           ) : (
             visibleRestaurants.map((r) => (
@@ -232,6 +450,15 @@ export default function HubPage() {
           </div>
         )}
       </div>
+
+      {filterOpen && (
+        <FilterSheet
+          initial={filters}
+          busy={locating}
+          onApply={(f) => void applyFilters(f)}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
     </div>
   );
 }

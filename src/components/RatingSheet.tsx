@@ -8,12 +8,14 @@ const LABELS = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
 type Props = {
   title: string;
   subtitle?: string;
+  /** Longest comment allowed. Companies allow 500, shops 300. */
+  maxLength?: number;
   onClose: () => void;
   /** Returns an error message, or null when the review was saved. */
   onSubmit: (rating: number, comment: string) => Promise<string | null>;
 };
 
-export default function RatingSheet({ title, subtitle, onClose, onSubmit }: Props) {
+export default function RatingSheet({ title, subtitle, maxLength = 500, onClose, onSubmit }: Props) {
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [sending, setSending] = useState(false);
@@ -31,8 +33,9 @@ export default function RatingSheet({ title, subtitle, onClose, onSubmit }: Prop
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end bg-black/50" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 dark:bg-slate-900">
+    // z-[60] so the sheet sits above the bottom nav (z-50).
+    <div className="fixed inset-0 z-[60] flex items-end bg-black/50" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="max-h-[90dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] dark:bg-slate-900">
         {done ? (
           <div className="space-y-4 text-center">
             <p className="text-lg font-bold text-slate-900 dark:text-white">Thank you!</p>
@@ -77,7 +80,7 @@ export default function RatingSheet({ title, subtitle, onClose, onSubmit }: Prop
 
             <textarea
               rows={3}
-              maxLength={500}
+              maxLength={maxLength}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               placeholder="Tell others what it was like (optional)"

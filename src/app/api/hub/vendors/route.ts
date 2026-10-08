@@ -3,6 +3,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import HubVendor from "@/models/HubVendor";
 import { isHubCategory } from "@/lib/hub/config";
 import { isVisibleInCategoryBrowsing, TIER_SORT_WEIGHT, type VendorTier } from "@/lib/pricing/vendorCommission";
+import { haversineKm } from "@/lib/pricing/distance";
 import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,12 @@ export async function GET(req: NextRequest) {
     const maxEta = sp.get("maxEta") ? Number(sp.get("maxEta")) : null;
     const tag = sp.get("tag");
 
+    // "Near me": the app sends the phone's position. Only distances go back, never the shop coordinates.
+    const lat = sp.get("lat") !== null ? Number(sp.get("lat")) : NaN;
+    const lng = sp.get("lng") !== null ? Number(sp.get("lng")) : NaN;
+    const hasLoc = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+    const nearest = sp.get("sort") === "nearest" && hasLoc;
+
     if (category && !isHubCategory(category)) return fail("Invalid category");
     if (minRating !== null && (Number.isNaN(minRating) || minRating < 0 || minRating > 5)) {
       return fail("Invalid minRating");
@@ -34,20 +41,36 @@ export async function GET(req: NextRequest) {
     if (maxEta !== null) filter.etaMax = { $lte: maxEta };
     if (tag) filter.filterTags = tag;
 
-    let vendors = await HubVendor.find(filter)
+    let found = await HubVendor.find(filter)
       .select(
-        "name description logoUrl emoji tagline filterTags rating reviewCount etaMin etaMax isOpen categories tier"
+        "name description logoUrl emoji tagline filterTags rating reviewCount etaMin etaMax isOpen categories tier lat lng"
       )
       .lean();
 
     // Basic-tier vendors are search-only: hidden whenever this isn't a
     // direct name search (i.e. plain browsing, with or without a category).
     if (!q) {
-      vendors = vendors.filter((v) => isVisibleInCategoryBrowsing(v.tier as VendorTier));
+      found = found.filter((v) => isVisibleInCategoryBrowsing(v.tier as VendorTier));
     }
 
-    // Premium vendors are boosted to the top; ties broken by rating, then name.
+    // Add the distance, and drop the coordinates before sending.
+    const vendors = found.map((v) => {
+      const { lat: vLat, lng: vLng, ...rest } = v;
+      const distanceKm =
+        hasLoc && typeof vLat === "number" && typeof vLng === "number"
+          ? Math.round(haversineKm({ lat: vLat, lng: vLng }, { lat, lng }) * 10) / 10
+          : null;
+      return { ...rest, distanceKm };
+    });
+
     vendors.sort((a, b) => {
+      if (nearest) {
+        // Closest first. Shops with no saved location go last.
+        const da = a.distanceKm ?? Number.POSITIVE_INFINITY;
+        const db = b.distanceKm ?? Number.POSITIVE_INFINITY;
+        if (da !== db) return da - db;
+      }
+      // Premium vendors are boosted to the top; ties broken by rating, then name.
       const weightDiff = TIER_SORT_WEIGHT[b.tier as VendorTier] - TIER_SORT_WEIGHT[a.tier as VendorTier];
       if (weightDiff !== 0) return weightDiff;
       const ratingDiff = (b.rating ?? 0) - (a.rating ?? 0);
