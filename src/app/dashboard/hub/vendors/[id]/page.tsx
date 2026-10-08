@@ -124,17 +124,18 @@ function FoodSheet({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+    // z-[60] so the sheet sits ABOVE the bottom nav (which is z-50).
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={product.name}
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-slate-900"
+        className="flex max-h-[85dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl bg-white dark:bg-slate-900"
       >
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="relative">
-            <div className="flex h-60 w-full items-center justify-center overflow-hidden bg-surface-muted text-7xl dark:bg-slate-800">
+            <div className="flex h-40 w-full items-center justify-center overflow-hidden bg-surface-muted text-6xl dark:bg-slate-800">
               {product.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
@@ -259,7 +260,7 @@ function FoodSheet({
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-slate-100 p-4 pb-6 dark:border-slate-800">
+        <div className="shrink-0 border-t border-slate-100 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] dark:border-slate-800">
           {!product.available ? (
             <p className="rounded-2xl bg-red-50 py-3 text-center text-sm font-bold text-red-600 dark:bg-red-500/10 dark:text-red-300">
               Sold out
