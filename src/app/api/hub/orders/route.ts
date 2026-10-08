@@ -96,7 +96,8 @@ export async function POST(req: NextRequest) {
     const products = await HubProduct.find({ _id: { $in: productIds }, isActive: true });
 
     const byId = new Map(products.map((p) => [String(p._id), p]));
-    for (const [productId, total] of totals) {
+    for (const productId of productIds) {
+      const total = totals.get(productId) ?? 0;
       const p = byId.get(productId);
       if (!p) return fail("One of the items in your cart is no longer available");
       if (!p.isAvailable) return fail(`${p.name} is currently unavailable`);
