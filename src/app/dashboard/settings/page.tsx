@@ -4,6 +4,7 @@ import { useState, type ComponentType } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useI18n } from "@/contexts/I18nContext";
 import {
   User,
   CreditCard,
@@ -94,8 +95,9 @@ const PREF_ROWS: Row[] = [
 ];
 
 function SectionTitle({ children }: { children: string }) {
+  const { t } = useI18n();
   return (
-    <h2 className="px-1 text-base font-bold text-slate-900 dark:text-slate-100">{children}</h2>
+    <h2 className="px-1 text-base font-bold text-slate-900 dark:text-slate-100">{t(children)}</h2>
   );
 }
 
@@ -108,6 +110,7 @@ function IconBubble({ icon: Icon }: { icon: Row["icon"] }) {
 }
 
 function RowGroup({ rows }: { rows: Row[] }) {
+  const { t } = useI18n();
   return (
     <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
       {rows.map((row) => {
@@ -116,8 +119,8 @@ function RowGroup({ rows }: { rows: Row[] }) {
             <div className="flex min-w-0 items-center gap-3">
               <IconBubble icon={row.icon} />
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{row.title}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{row.subtitle}</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t(row.title)}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{t(row.subtitle)}</p>
               </div>
             </div>
             {row.href && <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />}
@@ -145,6 +148,7 @@ function RowGroup({ rows }: { rows: Row[] }) {
 export default function SettingsPage() {
   const { client, user, signOut, getIdToken } = useAuth();
   const router = useRouter();
+  const { t } = useI18n();
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -183,9 +187,9 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-extrabold text-brand dark:text-white">Settings</h1>
+        <h1 className="text-2xl font-extrabold text-brand dark:text-white">{t("Settings")}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Manage your account, preferences and get the help you need.
+          {t("Manage your account, preferences and get the help you need.")}
         </p>
       </div>
 
@@ -215,7 +219,7 @@ export default function SettingsPage() {
           )}
           <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-brand-accent dark:bg-slate-700">
             <BadgeCheck className="h-3.5 w-3.5" />
-            Verified User
+            {t("Verified User")}
           </span>
         </div>
         <div className="flex shrink-0 flex-col items-center gap-2">
@@ -250,7 +254,7 @@ export default function SettingsPage() {
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-red-600 dark:bg-slate-900">
               <LogOut className="h-5 w-5" />
             </span>
-            <span className="text-sm font-semibold text-red-600 dark:text-red-400">Log out</span>
+            <span className="text-sm font-semibold text-red-600 dark:text-red-400">{t("Log out")}</span>
           </span>
           <ChevronRight className="h-4 w-4 text-slate-400" />
         </button>
@@ -260,7 +264,7 @@ export default function SettingsPage() {
           className="mx-auto flex items-center gap-1.5 px-2 py-1 text-xs font-semibold text-slate-400 transition hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400"
         >
           <Trash2 className="h-3.5 w-3.5" />
-          Delete account
+          {t("Delete account")}
         </button>
       </section>
 

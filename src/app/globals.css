@@ -25,6 +25,8 @@
 .dark .bg-surface-muted { background-color: #171717 !important; }
 /* keep the little round knob on toggle switches white */
 .dark .bg-white.h-5.w-5.rounded-full { background-color: #FFFFFF !important; }
+.dark .bg-white.h-6.w-6.rounded-full { background-color: #FFFFFF !important; }
+.dark .bg-white.h-2.w-2.rounded-full { background-color: #FFFFFF !important; }
 
 .dark .border-slate-100,
 .dark .border-slate-200 { border-color: #1F1F1F !important; }

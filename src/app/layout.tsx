@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { I18nProvider } from "@/contexts/I18nContext";
 import RegisterSW from "@/components/RegisterSW";
 import AppSplash from "@/components/AppSplash";
 import NativeBackButton from "@/components/NativeBackButton";
@@ -33,12 +34,12 @@ export default function RootLayout({
       </head>
       <body className="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <ThemeProvider>
-          <AuthProvider>
+          <AuthProvider><I18nProvider>
             <RegisterSW />
             <AppSplash />
             <NativeBackButton />
             {children}
-          </AuthProvider>
+          </I18nProvider></AuthProvider>
         </ThemeProvider>
       </body>
     </html>

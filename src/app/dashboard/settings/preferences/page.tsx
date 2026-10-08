@@ -4,15 +4,10 @@ import { useState } from "react";
 import { Moon, Sun, Bell, Mail as MailIcon, Globe, Check } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useI18n } from "@/contexts/I18nContext";
+import { LANGUAGES, type LangCode } from "@/lib/i18n/translations";
 import SettingsHeader from "@/components/SettingsHeader";
-
-const LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "yo", label: "Yoruba" },
-  { code: "ha", label: "Hausa" },
-  { code: "ig", label: "Igbo" },
-  { code: "fr", label: "French" },
-];
+import Toggle from "@/components/ui/Toggle";
 
 const CARD =
   "overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900";
@@ -29,44 +24,13 @@ function Bubble({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Toggle({
-  checked,
-  onChange,
-  disabled,
-  label,
-}: {
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-  label: string;
-}) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={onChange}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition disabled:opacity-60 ${
-        checked ? "bg-brand-accent" : "bg-slate-300 dark:bg-slate-700"
-      }`}
-    >
-      <span
-        className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-          checked ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
-  );
-}
-
 export default function PreferencesPage() {
   const { client, getIdToken, refetchClient } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { lang, setLang, t } = useI18n();
 
   const [notifyEmail, setNotifyEmail] = useState(client?.notifyEmail ?? true);
   const [notifyPush, setNotifyPush] = useState(client?.notifyPush ?? true);
-  const [language, setLanguage] = useState(client?.language ?? "en");
   const [saving, setSaving] = useState(false);
 
   async function savePreference(update: Record<string, unknown>) {
@@ -84,13 +48,18 @@ export default function PreferencesPage() {
     }
   }
 
+  function chooseLanguage(code: LangCode) {
+    setLang(code); // changes the text straight away
+    void savePreference({ language: code }); // and remembers it on the account
+  }
+
   return (
     <div className="space-y-6">
-      <SettingsHeader title="Preferences" subtitle="Notifications, language and appearance." />
+      <SettingsHeader title={t("Preferences")} subtitle={t("Notifications, language and appearance.")} />
 
       {/* Notifications */}
       <section className="space-y-3">
-        <SectionTitle>Notifications</SectionTitle>
+        <SectionTitle>{t("Notifications")}</SectionTitle>
         <div className={`${CARD} divide-y divide-slate-100 dark:divide-slate-800`}>
           <div className="flex items-center justify-between gap-3 px-4 py-3.5">
             <div className="flex items-center gap-3">
@@ -98,18 +67,18 @@ export default function PreferencesPage() {
                 <MailIcon className="h-5 w-5" />
               </Bubble>
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Email</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Order and delivery updates by email.</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("Email")}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{t("Order and delivery updates by email.")}</p>
               </div>
             </div>
             <Toggle
-              label="Email notifications"
+              label={t("Email notifications")}
               checked={notifyEmail}
               disabled={saving}
               onChange={() => {
                 const next = !notifyEmail;
                 setNotifyEmail(next);
-                savePreference({ notifyEmail: next });
+                void savePreference({ notifyEmail: next });
               }}
             />
           </div>
@@ -119,18 +88,18 @@ export default function PreferencesPage() {
                 <Bell className="h-5 w-5" />
               </Bubble>
               <div>
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Push</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Real-time alerts in the app.</p>
+                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("Push")}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{t("Real-time alerts in the app.")}</p>
               </div>
             </div>
             <Toggle
-              label="Push notifications"
+              label={t("Push notifications")}
               checked={notifyPush}
               disabled={saving}
               onChange={() => {
                 const next = !notifyPush;
                 setNotifyPush(next);
-                savePreference({ notifyPush: next });
+                void savePreference({ notifyPush: next });
               }}
             />
           </div>
@@ -139,37 +108,32 @@ export default function PreferencesPage() {
 
       {/* Language */}
       <section className="space-y-3">
-        <SectionTitle>Language</SectionTitle>
+        <SectionTitle>{t("Language")}</SectionTitle>
         <div className={CARD}>
           <div className="flex items-center gap-3 px-4 pt-3.5">
             <Bubble>
               <Globe className="h-5 w-5" />
             </Bubble>
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Display language</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("Display language")}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Your choice is saved. Full translation isn't live yet.
+                {t("Your choice is saved and applies across the app.")}
               </p>
             </div>
           </div>
           <div className="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
             {LANGUAGES.map((l) => {
-              const selected = language === l.code;
+              const selected = lang === l.code;
               return (
                 <button
                   key={l.code}
-                  disabled={saving}
-                  onClick={() => {
-                    setLanguage(l.code);
-                    savePreference({ language: l.code });
-                  }}
-                  className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-slate-50 disabled:opacity-60 dark:hover:bg-slate-800/60"
+                  type="button"
+                  onClick={() => chooseLanguage(l.code)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/60"
                 >
                   <span
                     className={`text-sm ${
-                      selected
-                        ? "font-semibold text-brand-accent"
-                        : "text-slate-700 dark:text-slate-200"
+                      selected ? "font-semibold text-brand-accent" : "text-slate-700 dark:text-slate-200"
                     }`}
                   >
                     {l.label}
@@ -179,25 +143,28 @@ export default function PreferencesPage() {
               );
             })}
           </div>
+          {lang !== "en" && (
+            <p className="border-t border-slate-100 px-4 py-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+              {t("Some screens are still being translated.")}
+            </p>
+          )}
         </div>
       </section>
 
       {/* Appearance */}
       <section className="space-y-3">
-        <SectionTitle>Appearance</SectionTitle>
+        <SectionTitle>{t("Appearance")}</SectionTitle>
         <div className={`${CARD} flex items-center justify-between gap-3 px-4 py-3.5`}>
           <div className="flex items-center gap-3">
-            <Bubble>
-              {theme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-            </Bubble>
+            <Bubble>{theme === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}</Bubble>
             <div>
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">Dark mode</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{t("Dark mode")}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {theme === "dark" ? "Currently on." : "Currently off."}
+                {theme === "dark" ? t("Currently on.") : t("Currently off.")}
               </p>
             </div>
           </div>
-          <Toggle label="Dark mode" checked={theme === "dark"} onChange={toggleTheme} />
+          <Toggle label={t("Dark mode")} checked={theme === "dark"} onChange={toggleTheme} />
         </div>
       </section>
     </div>
