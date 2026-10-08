@@ -1,15 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useCart } from "@/contexts/CartContext";
+import { useCart, unitPriceOf } from "@/contexts/CartContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
+import { priceSelection, type OptionGroup } from "@/lib/hub/options";
 
 type CheckResponse = {
   vendor: { _id: string; name: string; isOpen: boolean } | null;
-  items: { productId: string; name: string; priceKobo: number; isAvailable: boolean; stock: number | null }[];
+  items: {
+    productId: string;
+    name: string;
+    priceKobo: number;
+    isAvailable: boolean;
+    stock: number | null;
+    optionGroups?: OptionGroup[];
+  }[];
 };
 
 export interface LiveItem {
+  /** price of ONE plate right now, including its extras */
   livePriceKobo: number;
   priceChanged: boolean;
   issue: string | null; // why this item can't be ordered right now
@@ -17,9 +26,10 @@ export interface LiveItem {
 }
 
 /**
- * Live state of the cart: current prices, availability, and whether the store
- * is open. Stored carts keep the price from when the item was added, so this is
- * what the customer should see. The server re-checks everything at order time.
+ * Live state of the cart: current prices, availability, and whether the store is
+ * open. Stored carts keep the price from when the item was added, so this is what
+ * the customer should see. The server re-checks and re-prices everything at order time.
+ * Results are keyed by cart line (lineId).
  */
 export function useCartCheck() {
   const { items, hydrated } = useCart();
@@ -29,7 +39,10 @@ export function useCartCheck() {
   const [checkFailed, setCheckFailed] = useState(false);
   const seq = useRef(0);
 
-  const idsKey = useMemo(() => items.map((i) => i.productId).sort().join(","), [items]);
+  const idsKey = useMemo(
+    () => Array.from(new Set(items.map((i) => i.productId))).sort().join(","),
+    [items]
+  );
 
   const refresh = useCallback(async () => {
     if (!idsKey) return;
@@ -73,7 +86,11 @@ export function useCartCheck() {
     const live = new Map<string, CheckResponse["items"][number]>();
     data?.items.forEach((i) => live.set(i.productId, i));
 
-    const byProduct: Record<string, LiveItem> = {};
+    // plates of each product across all of its lines (for stock)
+    const totals = new Map<string, number>();
+    for (const item of items) totals.set(item.productId, (totals.get(item.productId) ?? 0) + item.quantity);
+
+    const byLine: Record<string, LiveItem> = {};
     let liveSubtotalKobo = 0;
     let anyPriceChanged = false;
     const removableIds: string[] = [];
@@ -83,15 +100,18 @@ export function useCartCheck() {
       const l = live.get(item.productId);
       let issue: string | null = null;
       let removable = false;
+      let extrasKobo = item.optionsKobo ?? 0;
+      let optionsBroken = false;
 
       if (data) {
+        const wanted = totals.get(item.productId) ?? item.quantity;
         if (!l) {
           issue = "No longer available";
           removable = true;
         } else if (!l.isAvailable) {
           issue = "Currently unavailable";
           removable = true;
-        } else if (l.stock !== null && l.stock < item.quantity) {
+        } else if (l.stock !== null && l.stock < wanted) {
           if (l.stock <= 0) {
             issue = "Sold out";
             removable = true;
@@ -99,15 +119,27 @@ export function useCartCheck() {
             issue = `Only ${l.stock} left`;
           }
         }
+
+        if (l && !issue) {
+          const priced = priceSelection(l.optionGroups, item.selections);
+          if (priced.ok) {
+            extrasKobo = priced.extrasKobo;
+          } else {
+            issue = "The options for this item changed. Remove it and add it again.";
+            removable = true;
+            optionsBroken = true;
+          }
+        }
       }
 
-      const livePriceKobo = l ? l.priceKobo : item.priceKobo;
-      const priceChanged = Boolean(l) && l!.priceKobo !== item.priceKobo;
+      const baseKobo = l ? l.priceKobo : item.priceKobo;
+      const livePriceKobo = baseKobo + extrasKobo;
+      const priceChanged = Boolean(l) && !optionsBroken && livePriceKobo !== unitPriceOf(item);
       if (priceChanged) anyPriceChanged = true;
       if (issue) anyIssue = true;
-      if (removable) removableIds.push(item.productId);
+      if (removable) removableIds.push(item.lineId);
 
-      byProduct[item.productId] = { livePriceKobo, priceChanged, issue, removable };
+      byLine[item.lineId] = { livePriceKobo, priceChanged, issue, removable };
       liveSubtotalKobo += livePriceKobo * item.quantity;
     }
 
@@ -117,7 +149,9 @@ export function useCartCheck() {
       checking,
       checkFailed,
       storeClosed,
-      byProduct,
+      byLine,
+      // kept so older screens that read byProduct[productId] keep working for items without options
+      byProduct: byLine,
       liveSubtotalKobo,
       anyPriceChanged,
       removableIds,

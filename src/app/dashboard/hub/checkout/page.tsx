@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Bike } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useCart } from "@/contexts/CartContext";
+import { useCart, unitPriceOf } from "@/contexts/CartContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import { useCartCheck } from "@/lib/hub/useCartCheck";
 import { usePaystackPopup } from "@/lib/hub/usePaystackPopup";
@@ -80,7 +80,7 @@ export default function CheckoutPage() {
     };
   }, [api]);
 
-  // Debounced live preview — refetches whenever vehicle or address changes
+  // Debounced live preview - refetches whenever vehicle or address changes
   useEffect(() => {
     if (!vendorId || !vehicleType || !deliveryPlace) {
       setFee(null);
@@ -132,8 +132,9 @@ export default function CheckoutPage() {
     setStage("creating");
 
     try {
+      // lineId already includes the options picked, so a changed cart makes a new order
       const sig = JSON.stringify({
-        i: items.map((i) => [i.productId, i.quantity]),
+        i: items.map((i) => [i.lineId, i.quantity]),
         a: address.trim(),
         p: phone.trim(),
         n: note.trim(),
@@ -153,10 +154,15 @@ export default function CheckoutPage() {
           accessCode = r.accessCode;
         }
       } else {
+        // Only which food, how many plates and which options are sent. The server works out the prices.
         const r = await api<{ orderId: string; accessCode: string }>("/api/hub/orders", {
           method: "POST",
           body: JSON.stringify({
-            items: items.map((i) => ({ productId: i.productId, quantity: i.quantity })),
+            items: items.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              selections: i.selections ?? [],
+            })),
             delivery: { address, phone, note },
             vehicleType,
             deliveryLat: deliveryPlace.lat,
@@ -186,7 +192,7 @@ export default function CheckoutPage() {
         },
         onCancel: () => {
           setStage("idle");
-          setError("Payment not completed. Your order is saved — tap Pay to try again.");
+          setError("Payment not completed. Your order is saved \u2014 tap Pay to try again.");
         },
         onError: (message) => {
           setStage("idle");
@@ -248,7 +254,7 @@ export default function CheckoutPage() {
 
       {/* vehicle type */}
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
-        <p className="text-sm font-bold text-brand">🚲 Delivery vehicle</p>
+        <p className="text-sm font-bold text-brand">{"\uD83D\uDEB2"} Delivery vehicle</p>
         <div className="grid grid-cols-2 gap-2">
           {VEHICLE_OPTIONS.map((v) => {
             const selected = vehicleType === v.key;
@@ -274,7 +280,7 @@ export default function CheckoutPage() {
 
       {/* delivery details */}
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
-        <p className="text-sm font-bold text-brand">📍 Delivery details</p>
+        <p className="text-sm font-bold text-brand">{"\uD83D\uDCCD"} Delivery details</p>
         <MapboxAddressInput
           label="Delivery address"
           placeholder="Search for your delivery address"
@@ -302,20 +308,25 @@ export default function CheckoutPage() {
       {/* order summary */}
       <div className="space-y-2 rounded-2xl bg-white p-4 shadow-card">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-brand">🧾 Your order</p>
+          <p className="text-sm font-bold text-brand">{"\uD83E\uDDFE"} Your order</p>
           <span className="text-xs text-steel">{vendorName}</span>
         </div>
         {items.map((i) => {
-          const live = check.byProduct[i.productId];
-          const price = live?.livePriceKobo ?? i.priceKobo;
+          const live = check.byLine[i.lineId];
+          const price = live?.livePriceKobo ?? unitPriceOf(i);
           return (
-            <div key={i.productId}>
+            <div key={i.lineId}>
               <div className="flex items-center justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate text-brand">
-                  {i.quantity} × {i.name}
+                  {i.quantity} &times; {i.name}
                 </span>
                 <span className="shrink-0 font-semibold text-brand">{formatNaira(price * i.quantity)}</span>
               </div>
+              {i.picked && i.picked.length > 0 && (
+                <p className="text-[11px] text-steel">
+                  {i.picked.map((o) => o.quantity + " \u00D7 " + o.choiceName).join(", ")}
+                </p>
+              )}
               {live?.issue && <p className="text-xs font-semibold text-red-600">{live.issue}</p>}
             </div>
           );
@@ -329,25 +340,25 @@ export default function CheckoutPage() {
             <span>Delivery fee {fee && `(${fee.distanceKm}km)`}</span>
             <span className="font-semibold text-brand">
               {feeLoading
-                ? "Calculating…"
+                ? "Calculating\u2026"
                 : fee
                 ? formatNaira(fee.deliveryFeeKobo)
                 : vehicleType && deliveryPlace
-                ? "—"
+                ? "\u2014"
                 : "Choose vehicle & address"}
             </span>
           </div>
           {feeError && <p className="text-xs text-red-600">{feeError}</p>}
           <div className="flex justify-between border-t border-slate-100 pt-1.5 font-bold text-brand">
             <span>Total</span>
-            <span>{fee ? formatNaira(totalKobo) : "—"}</span>
+            <span>{fee ? formatNaira(totalKobo) : "\u2014"}</span>
           </div>
         </div>
       </div>
 
       {/* payment */}
       <div className="space-y-3 rounded-2xl bg-white p-4 shadow-card">
-        <p className="text-sm font-bold text-brand">💳 Payment</p>
+        <p className="text-sm font-bold text-brand">{"\uD83D\uDCB3"} Payment</p>
 
         <div className="space-y-2">
           <button type="button" onClick={() => setPayMethod("paystack")} className={methodClass(payMethod === "paystack")}>
@@ -355,9 +366,9 @@ export default function CheckoutPage() {
             <span className="text-[11px] font-medium">Paystack</span>
           </button>
           <button type="button" onClick={() => setPayMethod("wallet")} className={methodClass(payMethod === "wallet")}>
-            <span>👛 Crafteey wallet</span>
+            <span>{"\uD83D\uDC5B"} Crafteey wallet</span>
             <span className="text-[11px] font-medium">
-              {walletBalanceKobo === null ? "…" : formatNaira(walletBalanceKobo)}
+              {walletBalanceKobo === null ? "\u2026" : formatNaira(walletBalanceKobo)}
             </span>
           </button>
         </div>
@@ -378,7 +389,7 @@ export default function CheckoutPage() {
             Pay right here without leaving the app. Pick your method after tapping Pay.
           </p>
         )}
-        <p className="text-[11px] text-steel">🔒 Secured by Paystack</p>
+        <p className="text-[11px] text-steel">{"\uD83D\uDD12"} Secured by Paystack</p>
       </div>
 
       {error && <p className="rounded-2xl bg-red-50 p-4 text-center text-xs text-red-600">{error}</p>}
@@ -391,9 +402,9 @@ export default function CheckoutPage() {
         >
           <span className="text-sm font-extrabold">
             {stage === "creating"
-              ? "Preparing payment…"
+              ? "Preparing payment\u2026"
               : stage === "paying"
-              ? "Waiting for payment…"
+              ? "Waiting for payment\u2026"
               : check.storeClosed
               ? "Store is closed"
               : blocked

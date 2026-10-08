@@ -1,5 +1,6 @@
 import mongoose, { Schema, type Model, type Types } from "mongoose";
 import { HUB_ORDER_STATUSES, type HubOrderStatus } from "../lib/hub/config";
+import type { PickedOption } from "../lib/hub/options";
 
 export interface IHubOrder {
   _id: Types.ObjectId;
@@ -8,7 +9,16 @@ export interface IHubOrder {
   vendorId: Types.ObjectId;
   vendorName: string;
   orderNumber: string;
-  items: { productId: Types.ObjectId; name: string; imageUrl?: string; unitPriceKobo: number; quantity: number }[];
+  items: {
+    productId: Types.ObjectId;
+    name: string;
+    imageUrl?: string;
+    /** price of one plate including the extras picked */
+    unitPriceKobo: number;
+    quantity: number;
+    /** copy of the extras picked, so later menu edits never change this order */
+    options?: PickedOption[];
+  }[];
   subtotalKobo: number;
   deliveryFeeKobo: number;
   totalKobo: number;
@@ -49,6 +59,16 @@ const HubOrderSchema = new Schema<IHubOrder>(
         imageUrl: String,
         unitPriceKobo: { type: Number, required: true },
         quantity: { type: Number, required: true, min: 1 },
+        options: [
+          {
+            _id: false,
+            groupName: String,
+            choiceName: String,
+            quantity: Number,
+            priceKobo: Number,
+            imageUrl: String,
+          },
+        ],
       },
     ],
     subtotalKobo: { type: Number, required: true },

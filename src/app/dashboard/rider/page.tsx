@@ -22,6 +22,7 @@ import AddressSearchOverlay, {
   MotorcycleIcon,
   type VehicleType,
 } from "@/components/map/AddressSearchOverlay";
+import BannerCarousel from "@/components/home/BannerCarousel";
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 
 interface CourierRequest {
@@ -41,7 +42,7 @@ interface CourierRequest {
   createdAt: string;
 }
 
-// Which step of the Booked → Pickup → In transit → Delivered tracker each
+// Which step of the Booked -> Pickup -> In transit -> Delivered tracker each
 // status lights up. PICKED_UP and EN_ROUTE share the "In transit" step.
 const STEPS = ["Booked", "Pickup", "In transit", "Delivered"];
 
@@ -109,8 +110,8 @@ const VEHICLE_CARDS: {
 ];
 
 // Once a courier is assigned and actually en route, this is when live
-// tracking matters — before that (PENDING) there's no courier to track yet.
-// Typed as string[] explicitly — without this, TypeScript narrows the
+// tracking matters - before that (PENDING) there's no courier to track yet.
+// Typed as string[] explicitly - without this, TypeScript narrows the
 // array to the literal union of the specific COURIER_STATUS values, and
 // .includes() on a literal-typed array rejects the plain `string` type of
 // active.status, which is what caused the earlier type error.
@@ -120,7 +121,7 @@ const TRACKABLE_STATUSES: string[] = [
   COURIER_STATUS.EN_ROUTE,
 ];
 
-// crafteey-rider is a separate deployment — this is a cross-origin call.
+// crafteey-rider is a separate deployment - this is a cross-origin call.
 const RIDER_APP_URL = process.env.NEXT_PUBLIC_RIDER_APP_URL ?? "";
 
 function StatusStepper({ current }: { current: number }) {
@@ -197,6 +198,21 @@ function RouteSummary({ pickup, dropoff }: { pickup: string; dropoff: string }) 
   );
 }
 
+// The plain yellow header, shown when there are no Rides banners.
+function RidesHeaderCard() {
+  return (
+    <div className="rounded-3xl bg-sunshine px-5 pb-5 pt-5">
+      <p className="text-xs font-bold uppercase tracking-wide text-brand/60">Crafteey Rides</p>
+      <h1 className="mt-1 text-2xl font-extrabold leading-tight text-brand">
+        Move your world with Crafteey Rides
+      </h1>
+      <p className="mt-1 text-sm font-medium text-brand/70">
+        Fast, safe and affordable deliveries only.
+      </p>
+    </div>
+  );
+}
+
 export default function RiderPage() {
   const { getIdToken } = useAuth();
   const [active, setActive] = useState<CourierRequest | null>(null);
@@ -213,7 +229,7 @@ export default function RiderPage() {
   const prevActiveRef = useRef<CourierRequest | null>(null);
 
   // Separate from `active.courierLocation` (Mongo's last-known value,
-  // fetched once) — this holds whatever crafteey-rider's live endpoint
+  // fetched once) - this holds whatever crafteey-rider's live endpoint
   // most recently returned, refreshed on its own timer during a delivery.
   const [liveLocation, setLiveLocation] = useState<{ lat: number; lng: number; live: boolean } | null>(
     null
@@ -236,7 +252,7 @@ export default function RiderPage() {
         return data.request ?? null;
       }
     } catch {
-      // network hiccup — keep polling, don't surface an error mid-search
+      // network hiccup - keep polling, don't surface an error mid-search
     }
     return null;
   }, [getIdToken]);
@@ -290,7 +306,7 @@ export default function RiderPage() {
           setLiveLocation({ lat: data.lat, lng: data.lng, live: !!data.live });
         }
       } catch {
-        // A missed poll isn't worth surfacing — the map just keeps
+        // A missed poll isn't worth surfacing - the map just keeps
         // showing the last position it has until the next one succeeds.
       }
     },
@@ -323,8 +339,8 @@ export default function RiderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?._id, active?.status]);
 
-  // New — keep the request's status fresh once a courier has accepted, so
-  // the Booked → Pickup → In transit tracker actually advances (previously
+  // Keep the request's status fresh once a courier has accepted, so
+  // the Booked -> Pickup -> In transit tracker actually advances (previously
   // the status was only re-fetched while the request was still PENDING).
   useEffect(() => {
     if (statusPollRef.current) {
@@ -345,7 +361,7 @@ export default function RiderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?._id, active?.status]);
 
-  // New — the "active" endpoint stops returning a request once it's
+  // The "active" endpoint stops returning a request once it's
   // delivered. If a request that had a courier assigned disappears, treat
   // it as completed and show the success screen.
   useEffect(() => {
@@ -477,7 +493,7 @@ export default function RiderPage() {
   return (
     <>
       {completed && !hasActiveRequest ? (
-        /* ─────────── Delivery successful ─────────── */
+        /* ----------- Delivery successful ----------- */
         <div className="space-y-6 pt-6">
           <div className="flex flex-col items-center text-center">
             <span className="flex h-24 w-24 items-center justify-center rounded-full bg-sunshine">
@@ -510,7 +526,7 @@ export default function RiderPage() {
           </div>
         </div>
       ) : hasActiveRequest ? (
-        /* ─────────── Active request / tracking ─────────── */
+        /* ----------- Active request / tracking ----------- */
         <div className="space-y-4">
           <div className="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 p-4">
             <p className="text-sm font-bold text-brand dark:text-white">{statusCopy!.title}</p>
@@ -548,7 +564,9 @@ export default function RiderPage() {
                   </p>
                   <p className="text-xs text-steel">
                     Your courier
-                    {active!.vehicleType ? ` • ${VEHICLE_LABEL[active!.vehicleType] ?? active!.vehicleType}` : ""}
+                    {active!.vehicleType
+                      ? ` \u2022 ${VEHICLE_LABEL[active!.vehicleType] ?? active!.vehicleType}`
+                      : ""}
                   </p>
                 </div>
                 {active!.courierPhone && (
@@ -565,9 +583,9 @@ export default function RiderPage() {
                 <p className="mt-3 text-xs font-medium text-steel">
                   {liveLocation
                     ? liveLocation.live
-                      ? "🟢 Live location"
-                      : "Last known location — courier's connection may be spotty"
-                    : "Waiting for courier's location…"}
+                      ? "\uD83D\uDFE2 Live location"
+                      : "Last known location - courier's connection may be spotty"
+                    : "Waiting for courier's location..."}
                 </p>
               )}
             </div>
@@ -580,17 +598,9 @@ export default function RiderPage() {
           <RouteSummary pickup={active!.pickup} dropoff={active!.dropoff} />
         </div>
       ) : (
-        /* ─────────── Idle: choose a ride type ─────────── */
+        /* ----------- Idle: choose a ride type ----------- */
         <div className="space-y-6">
-          <div className="rounded-3xl bg-sunshine px-5 pb-5 pt-5">
-            <p className="text-xs font-bold uppercase tracking-wide text-brand/60">Crafteey Rides</p>
-            <h1 className="mt-1 text-2xl font-extrabold leading-tight text-brand">
-              Move your world with Crafteey Rides
-            </h1>
-            <p className="mt-1 text-sm font-medium text-brand/70">
-              Fast, safe and affordable deliveries only.
-            </p>
-          </div>
+          <BannerCarousel placement="rides" fallback={<RidesHeaderCard />} />
 
           <div>
             <p className="text-base font-bold text-brand dark:text-white">Choose your ride type</p>
@@ -639,7 +649,7 @@ export default function RiderPage() {
               <li className="flex items-start gap-3">
                 <PhoneCall className="mt-0.5 h-4 w-4 shrink-0 text-brand-accent" />
                 <span className="text-sm text-slate-600 dark:text-slate-400">
-                  Double-check the receiver's phone number — your courier
+                  Double-check the receiver's phone number - your courier
                   will call to confirm the drop-off.
                 </span>
               </li>
@@ -671,10 +681,10 @@ export default function RiderPage() {
           onConfirm={handleConfirmRequest}
         />
       )}
-    
-     {searching && (
-  <SearchingOverlay pickup={pickupCoords} dropoff={dropoffCoords} onCancel={handleCancelSearch} />
-)}
+
+      {searching && (
+        <SearchingOverlay pickup={pickupCoords} dropoff={dropoffCoords} onCancel={handleCancelSearch} />
+      )}
     </>
   );
 }

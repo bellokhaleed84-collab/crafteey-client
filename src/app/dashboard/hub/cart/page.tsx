@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
-import { useCart } from "@/contexts/CartContext";
+import { useCart, unitPriceOf } from "@/contexts/CartContext";
 import { useCartCheck } from "@/lib/hub/useCartCheck";
 import { formatNaira } from "@/lib/hub/config";
 
@@ -32,7 +32,7 @@ export default function CartPage() {
         <div className="h-24 animate-pulse rounded-2xl bg-white shadow-card" />
       ) : items.length === 0 ? (
         <div className="rounded-2xl bg-white p-8 text-center shadow-card">
-          <p className="text-5xl">🛒</p>
+          <p className="text-5xl">{"\uD83D\uDED2"}</p>
           <p className="mt-3 text-sm font-bold text-brand">Your cart is empty</p>
           <p className="mt-1 text-xs text-steel">Add something tasty from the Hub.</p>
           <Link
@@ -77,11 +77,11 @@ export default function CartPage() {
 
           <div className="space-y-3">
             {items.map((i) => {
-              const live = check.byProduct[i.productId];
-              const price = live?.livePriceKobo ?? i.priceKobo;
+              const live = check.byLine[i.lineId];
+              const price = live?.livePriceKobo ?? unitPriceOf(i);
               return (
                 <div
-                  key={i.productId}
+                  key={i.lineId}
                   className={`flex items-center gap-3 rounded-2xl bg-white p-3 shadow-card ${
                     live?.issue ? "opacity-70" : ""
                   }`}
@@ -91,13 +91,25 @@ export default function CartPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={i.imageUrl} alt={i.name} className="h-full w-full object-cover" />
                     ) : (
-                      (i.emoji ?? "🛍️")
+                      (i.emoji ?? "\uD83D\uDECD\uFE0F")
                     )}
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-brand">{i.name}</p>
+                    {i.picked && i.picked.length > 0 && (
+                      <ul className="mt-0.5 space-y-0.5">
+                        {i.picked.map((o, k) => (
+                          <li key={k} className="text-[11px] text-steel">
+                            {o.quantity} &times; {o.choiceName}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <p className="text-xs font-bold text-brand-accent">
                       {formatNaira(price * i.quantity)}
+                      {i.quantity > 1 && (
+                        <span className="ml-1.5 font-medium text-steel">({formatNaira(price)} each)</span>
+                      )}
                       {live?.priceChanged && (
                         <span className="ml-1.5 font-medium text-amber-700">(price updated)</span>
                       )}
@@ -106,7 +118,7 @@ export default function CartPage() {
                     <div className="mt-1.5 flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => setQuantity(i.productId, i.quantity - 1)}
+                        onClick={() => setQuantity(i.lineId, i.quantity - 1)}
                         aria-label="Decrease quantity"
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface-muted text-brand"
                       >
@@ -115,7 +127,7 @@ export default function CartPage() {
                       <span className="w-5 text-center text-xs font-bold text-brand">{i.quantity}</span>
                       <button
                         type="button"
-                        onClick={() => setQuantity(i.productId, i.quantity + 1)}
+                        onClick={() => setQuantity(i.lineId, i.quantity + 1)}
                         aria-label="Increase quantity"
                         className="flex h-7 w-7 items-center justify-center rounded-lg bg-sunshine text-brand"
                       >
@@ -125,7 +137,7 @@ export default function CartPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => removeItem(i.productId)}
+                    onClick={() => removeItem(i.lineId)}
                     aria-label={`Remove ${i.name}`}
                     className="self-start p-1 text-red-400"
                   >

@@ -46,7 +46,7 @@ export default function BannerCarousel({
   placement = "home",
   fallback,
 }: {
-  placement?: "home" | "hub";
+  placement?: "home" | "hub" | "rides";
   fallback?: ReactNode;
 }) {
   const [banners, setBanners] = useState<PublicBanner[] | null>(null);

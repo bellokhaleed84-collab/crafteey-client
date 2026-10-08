@@ -16,17 +16,24 @@ type BannerRow = {
 };
 
 /**
- * GET /api/banners?placement=home|hub - public.
+ * GET /api/banners?placement=home|hub|rides - public.
  * Only banners that are switched on and inside their schedule.
  * Old banners with no placement count as Home.
+ * Home shows "home" and "both"; Hub shows "hub" and "both"; Rides shows "rides" only.
  */
 export async function GET(req: Request) {
   try {
     await connectToDatabase();
     const now = new Date();
-    const placement = new URL(req.url).searchParams.get("placement") === "hub" ? "hub" : "home";
+    const asked = new URL(req.url).searchParams.get("placement");
+    const placement = asked === "hub" ? "hub" : asked === "rides" ? "rides" : "home";
+
     const placementFilter =
-      placement === "hub" ? { placement: { $in: ["hub", "both"] } } : { placement: { $ne: "hub" } };
+      placement === "hub"
+        ? { placement: { $in: ["hub", "both"] } }
+        : placement === "rides"
+        ? { placement: "rides" }
+        : { placement: { $nin: ["hub", "rides"] } };
 
     const rows = await Banner.find({
       enabled: true,

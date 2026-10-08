@@ -12,14 +12,20 @@ import { calculateVendorPayout } from "@/lib/pricing/vendorCommission";
 import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
 import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
 import { fail, handleError } from "@/lib/hub/http";
+import { priceSelection, type OptionGroup, type PickedOption, type Selection } from "@/lib/hub/options";
 
 export const dynamic = "force-dynamic";
 
 // Same limit as the cart's MAX_QTY.
 const MAX_QTY = 50;
 const MAX_LINES = 50;
+const MAX_SELECTIONS = 40;
 
-type RequestedItem = { productId: string; quantity: number };
+type RequestedLine = { productId: string; quantity: number; selections: Selection[] };
+
+function groupsOf(p: { optionGroups?: unknown }): OptionGroup[] {
+  return JSON.parse(JSON.stringify(p.optionGroups ?? [])) as OptionGroup[];
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,39 +52,55 @@ export async function POST(req: NextRequest) {
       return fail("Please select a delivery address from the suggestions list");
     }
 
-    // Validate every line, and merge duplicates so stock is checked against
-    // the real total for each product.
-    const merged = new Map<string, number>();
+    // Validate every line. A line is one food with one set of options.
+    const lines: RequestedLine[] = [];
     for (const raw of rawItems) {
-      const it = raw as Partial<RequestedItem> | null;
+      const it = raw as { productId?: unknown; quantity?: unknown; selections?: unknown } | null;
       if (!it || typeof it.productId !== "string" || !mongoose.isValidObjectId(it.productId)) {
         return fail("Invalid item in cart");
       }
       if (typeof it.quantity !== "number" || !Number.isInteger(it.quantity) || it.quantity < 1) {
         return fail("Invalid quantity");
       }
-      merged.set(it.productId, (merged.get(it.productId) ?? 0) + it.quantity);
+      const rawSelections: unknown[] = Array.isArray(it.selections) ? it.selections : [];
+      if (rawSelections.length > MAX_SELECTIONS) return fail("Too many options selected");
+      const selections: Selection[] = [];
+      for (const s of rawSelections) {
+        const sel = s as { choiceId?: unknown; quantity?: unknown } | null;
+        if (
+          !sel ||
+          typeof sel.choiceId !== "string" ||
+          typeof sel.quantity !== "number" ||
+          !Number.isInteger(sel.quantity) ||
+          sel.quantity < 1 ||
+          sel.quantity > MAX_QTY
+        ) {
+          return fail("Invalid option");
+        }
+        selections.push({ choiceId: sel.choiceId, quantity: sel.quantity });
+      }
+      lines.push({ productId: it.productId, quantity: it.quantity, selections });
     }
-    const lines: RequestedItem[] = Array.from(merged, ([productId, quantity]) => ({
-      productId,
-      quantity,
-    }));
     if (lines.length > MAX_LINES || lines.some((l) => l.quantity > MAX_QTY)) {
       return fail(`You can order up to ${MAX_QTY} of each item`);
     }
 
+    // Stock is checked against the real total for each product across all its lines.
+    const totals = new Map<string, number>();
+    for (const l of lines) totals.set(l.productId, (totals.get(l.productId) ?? 0) + l.quantity);
+
     const client = await getClientByUid(user.uid);
     if (!client) return fail("Client account not found", 404);
 
-    const productIds = lines.map((l) => l.productId);
+    const productIds = Array.from(totals.keys());
     const products = await HubProduct.find({ _id: { $in: productIds }, isActive: true });
 
     const byId = new Map(products.map((p) => [String(p._id), p]));
-    for (const line of lines) {
-      const p = byId.get(line.productId);
+    for (const [productId, total] of totals) {
+      const p = byId.get(productId);
       if (!p) return fail("One of the items in your cart is no longer available");
       if (!p.isAvailable) return fail(`${p.name} is currently unavailable`);
-      if (typeof p.stock === "number" && p.stock < line.quantity) {
+      if (typeof p.stock === "number" && p.stock < total) {
         return fail(`Only ${p.stock} left of ${p.name}`);
       }
     }
@@ -91,19 +113,32 @@ export async function POST(req: NextRequest) {
     if (!vendor) return fail("Vendor not found", 404);
     if (!vendor.isOpen) return fail("This vendor is currently closed");
     if (typeof vendor.lat !== "number" || typeof vendor.lng !== "number") {
-      return fail("This vendor's location isn't set up yet — please try another vendor");
+      return fail("This vendor's location isn't set up yet \u2014 please try another vendor");
     }
 
-    const orderItems = lines.map((line) => {
+    // The price of each plate is worked out here from the vendor's saved options.
+    // Anything the phone says about price is ignored.
+    const orderItems: {
+      productId: mongoose.Types.ObjectId;
+      name: string;
+      imageUrl?: string;
+      unitPriceKobo: number;
+      quantity: number;
+      options: PickedOption[];
+    }[] = [];
+    for (const line of lines) {
       const p = byId.get(line.productId)!;
-      return {
+      const priced = priceSelection(groupsOf(p), line.selections);
+      if (!priced.ok) return fail(`${p.name}: ${priced.error}`);
+      orderItems.push({
         productId: p._id,
         name: p.name,
         imageUrl: p.imageUrl,
-        unitPriceKobo: p.priceKobo,
+        unitPriceKobo: p.priceKobo + priced.extrasKobo,
         quantity: line.quantity,
-      };
-    });
+        options: priced.picked,
+      });
+    }
 
     const subtotalKobo = orderItems.reduce((sum, it) => sum + it.unitPriceKobo * it.quantity, 0);
 

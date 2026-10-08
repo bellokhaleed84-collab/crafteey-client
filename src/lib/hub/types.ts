@@ -1,4 +1,5 @@
 import type { HubCategory, HubOrderStatus } from "./config";
+import type { PickedOption } from "./options";
 
 export interface HubVendorDTO {
   _id: string;
@@ -48,7 +49,14 @@ export interface HubOrderDTO {
   vendorId: string;
   vendorName: string;
   orderNumber?: string;
-  items: { productId: string; name: string; imageUrl?: string; unitPriceKobo: number; quantity: number }[];
+  items: {
+    productId: string;
+    name: string;
+    imageUrl?: string;
+    unitPriceKobo: number;
+    quantity: number;
+    options?: PickedOption[];
+  }[];
   subtotalKobo: number;
   deliveryFeeKobo: number;
   totalKobo: number;

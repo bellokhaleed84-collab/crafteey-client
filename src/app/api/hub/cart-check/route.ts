@@ -8,8 +8,8 @@ import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
 
-// Live state of the items in a cart: current price, availability, and whether
-// the store is open. Items missing from the response no longer exist.
+// Live state of the items in a cart: current price, availability, options, and
+// whether the store is open. Items missing from the response no longer exist.
 export async function POST(req: NextRequest) {
   try {
     await verifyToken(req);
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     const products = await HubProduct.find({ _id: { $in: ids }, isActive: true })
-      .select("name priceKobo isAvailable stock vendorId")
+      .select("name priceKobo isAvailable stock vendorId optionGroups")
       .lean();
 
     const vendorId = products[0]?.vendorId;
@@ -42,6 +42,19 @@ export async function POST(req: NextRequest) {
         priceKobo: p.priceKobo,
         isAvailable: p.isAvailable,
         stock: typeof p.stock === "number" ? p.stock : null,
+        optionGroups: (p.optionGroups ?? []).map((g) => ({
+          id: g.id,
+          name: g.name,
+          required: !!g.required,
+          single: !!g.single,
+          choices: (g.choices ?? []).map((c) => ({
+            id: c.id,
+            name: c.name,
+            priceKobo: c.priceKobo,
+            imageUrl: c.imageUrl ?? undefined,
+            maxQty: c.maxQty ?? 1,
+          })),
+        })),
       })),
     });
   } catch (e) {

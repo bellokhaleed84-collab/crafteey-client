@@ -11,7 +11,7 @@ import { fail, handleError } from "@/lib/hub/http";
 export const dynamic = "force-dynamic";
 
 // Once the order isn't just sitting at "paid", a courier request exists
-// (or should) — look it up so the client can see who's assigned and
+// (or should) - look it up so the client can see who's assigned and
 // where they are.
 const COURIER_VISIBLE_STATUSES = ["preparing", "out_for_delivery", "delivered"];
 
@@ -61,6 +61,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           imageUrl: i.imageUrl,
           unitPriceKobo: i.unitPriceKobo,
           quantity: i.quantity,
+          options: (i.options ?? []).map((o) => ({
+            groupName: o.groupName,
+            choiceName: o.choiceName,
+            quantity: o.quantity,
+            priceKobo: o.priceKobo,
+            imageUrl: o.imageUrl,
+          })),
         })),
         subtotalKobo: order.subtotalKobo,
         deliveryFeeKobo: order.deliveryFeeKobo,

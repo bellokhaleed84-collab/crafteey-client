@@ -20,12 +20,12 @@ const STEPS: { key: HubOrderStatus; label: string }[] = [
 ];
 
 const HERO: Record<HubOrderStatus, { emoji: string; title: string; text: string }> = {
-  pending_payment: { emoji: "⏳", title: "Awaiting payment", text: "Complete your payment to place this order." },
-  paid: { emoji: "✅", title: "Order placed", text: "Payment received. The vendor will start preparing it soon." },
-  preparing: { emoji: "👨‍🍳", title: "Being prepared", text: "Your order is being prepared." },
-  out_for_delivery: { emoji: "🛵", title: "On the way", text: "A rider is bringing your order." },
-  delivered: { emoji: "🎉", title: "Delivered", text: "Enjoy! Thanks for ordering with Crafteey." },
-  cancelled: { emoji: "❌", title: "Cancelled", text: "This order was cancelled." },
+  pending_payment: { emoji: "\u23F3", title: "Awaiting payment", text: "Complete your payment to place this order." },
+  paid: { emoji: "\u2705", title: "Order placed", text: "Payment received. The vendor will start preparing it soon." },
+  preparing: { emoji: "\uD83D\uDC68\u200D\uD83C\uDF73", title: "Being prepared", text: "Your order is being prepared." },
+  out_for_delivery: { emoji: "\uD83D\uDEF5", title: "On the way", text: "A rider is bringing your order." },
+  delivered: { emoji: "\uD83C\uDF89", title: "Delivered", text: "Enjoy! Thanks for ordering with Crafteey." },
+  cancelled: { emoji: "\u274C", title: "Cancelled", text: "This order was cancelled." },
 };
 
 const VEHICLE_LABEL: Record<string, string> = {
@@ -108,7 +108,7 @@ export default function OrderPage() {
     return () => clearInterval(t);
   }, [order, fetchOrder]);
 
-  // Live rider location — same pattern as the direct-booking tracking
+  // Live rider location - same pattern as the direct-booking tracking
   // screen in crafteey-rider's client-side counterpart (RiderPage.tsx),
   // polling crafteey-rider's cross-origin location endpoint directly.
   const fetchLiveLocation = useCallback(
@@ -208,8 +208,8 @@ export default function OrderPage() {
 
       {confirming ? (
         <div className="rounded-2xl bg-sunshine p-6 text-center">
-          <p className="text-4xl">⏳</p>
-          <p className="mt-2 text-sm font-extrabold text-brand">Confirming your payment…</p>
+          <p className="text-4xl">{"\u23F3"}</p>
+          <p className="mt-2 text-sm font-extrabold text-brand">Confirming your payment&hellip;</p>
           <p className="mt-1 text-xs font-medium text-brand/70">This only takes a moment.</p>
         </div>
       ) : !order ? (
@@ -236,7 +236,7 @@ export default function OrderPage() {
               disabled={paying}
               className="flex w-full items-center justify-between rounded-2xl bg-white px-5 py-3.5 text-brand shadow-card disabled:opacity-60"
             >
-              <span className="text-sm font-extrabold">{paying ? "Waiting for payment…" : "Pay now"}</span>
+              <span className="text-sm font-extrabold">{paying ? "Waiting for payment\u2026" : "Pay now"}</span>
               <span className="text-sm font-extrabold text-brand-accent">{formatNaira(order.totalKobo)}</span>
             </button>
           )}
@@ -270,14 +270,14 @@ export default function OrderPage() {
                   </span>
                 ) : (
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg">
-                    🛵
+                    {"\uD83D\uDEF5"}
                   </span>
                 )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold text-brand">{courier.name || "Rider assigned"}</p>
                   <p className="text-xs text-steel">
                     {COURIER_STATUS_TEXT[courier.status] ?? "On the way"}
-                    {courier.vehicleType ? ` • ${VEHICLE_LABEL[courier.vehicleType] ?? courier.vehicleType}` : ""}
+                    {courier.vehicleType ? ` \u2022 ${VEHICLE_LABEL[courier.vehicleType] ?? courier.vehicleType}` : ""}
                   </p>
                 </div>
                 {courier.phone && (
@@ -311,13 +311,22 @@ export default function OrderPage() {
           )}
 
           <div className="space-y-2 rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-sm font-bold text-brand">🧾 {order.vendorName}</p>
-            {order.items.map((i) => (
-              <div key={i.productId} className="flex items-center justify-between gap-3 text-sm">
-                <span className="min-w-0 truncate text-brand">
-                  {i.quantity} × {i.name}
-                </span>
-                <span className="shrink-0 font-semibold text-brand">{formatNaira(i.unitPriceKobo * i.quantity)}</span>
+            <p className="text-sm font-bold text-brand">
+              {"\uD83E\uDDFE"} {order.vendorName}
+            </p>
+            {order.items.map((i, idx) => (
+              <div key={i.productId + "-" + idx}>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate text-brand">
+                    {i.quantity} &times; {i.name}
+                  </span>
+                  <span className="shrink-0 font-semibold text-brand">{formatNaira(i.unitPriceKobo * i.quantity)}</span>
+                </div>
+                {i.options && i.options.length > 0 && (
+                  <p className="text-[11px] text-steel">
+                    {i.options.map((o) => o.quantity + " \u00D7 " + o.choiceName).join(", ")}
+                  </p>
+                )}
               </div>
             ))}
             <div className="space-y-1.5 border-t border-slate-100 pt-2 text-sm">
@@ -333,7 +342,7 @@ export default function OrderPage() {
           </div>
 
           <div className="rounded-2xl bg-white p-4 shadow-card">
-            <p className="text-sm font-bold text-brand">📍 Delivering to</p>
+            <p className="text-sm font-bold text-brand">{"\uD83D\uDCCD"} Delivering to</p>
             <p className="mt-1 text-sm text-steel">{order.delivery.address}</p>
             {order.delivery.phone && <p className="text-sm text-steel">{order.delivery.phone}</p>}
           </div>

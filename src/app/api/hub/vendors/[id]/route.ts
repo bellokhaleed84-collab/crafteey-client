@@ -43,6 +43,19 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         unit: p.unit ?? null,
         menuSection: p.menuSection ?? null,
         available: p.isAvailable && (p.stock == null || p.stock > 0),
+        optionGroups: (p.optionGroups ?? []).map((g) => ({
+          id: g.id,
+          name: g.name,
+          required: !!g.required,
+          single: !!g.single,
+          choices: (g.choices ?? []).map((c) => ({
+            id: c.id,
+            name: c.name,
+            priceKobo: c.priceKobo,
+            imageUrl: c.imageUrl ?? undefined,
+            maxQty: c.maxQty ?? 1,
+          })),
+        })),
       })),
     });
   } catch (e) {
