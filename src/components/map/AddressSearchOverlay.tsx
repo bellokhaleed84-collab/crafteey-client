@@ -1,19 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Bike, Truck } from "lucide-react";
+import { ArrowLeft, Banknote, Bike, Landmark, Truck } from "lucide-react";
 import MapboxAddressInput, { type PlaceResult } from "@/components/map/MapboxAddressInput";
 import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
 import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
 
 export type VehicleType = "bicycle" | "motorcycle" | "cargo";
+export type PaymentMethod = "cash" | "transfer";
 
 interface AddressSearchOverlayProps {
   initialPickup?: string;
   initialDropoff?: string;
-  // New — lets the Rides page open this overlay with a vehicle already
-  // selected when the rider taps a Bicycle/Motorcycle/Cargo card. Optional,
-  // so any other caller keeps working exactly as before.
+  // Lets the Rides page open this overlay with a vehicle already selected.
   defaultVehicleType?: VehicleType | null;
   error?: string | null;
   submitting?: boolean;
@@ -29,11 +28,11 @@ interface AddressSearchOverlayProps {
     pickupContactName?: string;
     pickupContactPhone?: string;
     vehicleType: VehicleType;
+    paymentMethod: PaymentMethod;
   }) => void;
 }
 
-// Simple inline motorcycle icon — lucide doesn't ship one, so this is a
-// minimal custom SVG rather than reusing the bicycle icon for both.
+// Simple inline motorcycle icon - lucide doesn't ship one.
 // Exported so the Rides page can reuse the same icon on its vehicle cards.
 export function MotorcycleIcon({ className }: { className?: string }) {
   return (
@@ -55,6 +54,11 @@ const VEHICLE_OPTIONS: { key: VehicleType; label: string; icon: (p: { className?
   { key: "cargo", label: "Cargo", icon: (p) => <Truck {...p} /> },
 ];
 
+const PAYMENT_OPTIONS: { key: PaymentMethod; label: string; icon: (p: { className?: string }) => JSX.Element }[] = [
+  { key: "cash", label: "Cash", icon: (p) => <Banknote {...p} /> },
+  { key: "transfer", label: "Transfer", icon: (p) => <Landmark {...p} /> },
+];
+
 export default function AddressSearchOverlay({
   initialPickup = "",
   initialDropoff = "",
@@ -70,6 +74,7 @@ export default function AddressSearchOverlay({
   const [dropoffPlace, setDropoffPlace] = useState<PlaceResult | null>(null);
   const [note, setNote] = useState("");
   const [vehicleType, setVehicleType] = useState<VehicleType | null>(defaultVehicleType);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [estimatedFee, setEstimatedFee] = useState<number | null>(null);
 
   const [receiverName, setReceiverName] = useState("");
@@ -78,10 +83,8 @@ export default function AddressSearchOverlay({
   const [pickupContactName, setPickupContactName] = useState("");
   const [pickupContactPhone, setPickupContactPhone] = useState("");
 
-  // Live fare estimate — recalculates whenever pickup, dropoff, or vehicle
-  // type changes. This excludes the rider-to-pickup leg (no rider is
-  // assigned yet at this point), same approach used for Hub checkout —
-  // so it's shown as an estimate, and the final fee firms up once a rider accepts.
+  // Live fare estimate. Excludes the rider-to-pickup leg (no rider is
+  // assigned yet), same approach used for Hub checkout.
   useEffect(() => {
     if (!pickupPlace || !dropoffPlace || !vehicleType) {
       setEstimatedFee(null);
@@ -125,6 +128,7 @@ export default function AddressSearchOverlay({
       pickupContactName: pickupContactName.trim() || undefined,
       pickupContactPhone: pickupContactPhone.trim() || undefined,
       vehicleType: vehicleType!,
+      paymentMethod,
     });
   }
 
@@ -184,7 +188,7 @@ export default function AddressSearchOverlay({
           onSelect={setDropoffPlace}
         />
 
-        {/* Fare estimate — appears once pickup, dropoff, and vehicle are all set */}
+        {/* Fare estimate - appears once pickup, dropoff, and vehicle are all set */}
         {estimatedFee !== null && (
           <div className="rounded-xl border border-brand-accent/30 bg-brand-accent/5 p-3.5">
             <div className="flex items-center justify-between">
@@ -192,7 +196,8 @@ export default function AddressSearchOverlay({
                 Estimated fare
               </span>
               <span className="text-lg font-bold text-brand dark:text-white">
-                ₦{estimatedFee.toLocaleString()}
+                {"\u20A6"}
+                {estimatedFee.toLocaleString()}
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -200,6 +205,39 @@ export default function AddressSearchOverlay({
             </p>
           </div>
         )}
+
+        {/* Payment method */}
+        <div>
+          <label className="mb-1.5 block text-xs font-semibold text-slate-700 dark:text-slate-300">
+            How will you pay?
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {PAYMENT_OPTIONS.map((p) => {
+              const Icon = p.icon;
+              const selected = paymentMethod === p.key;
+              return (
+                <button
+                  key={p.key}
+                  type="button"
+                  onClick={() => setPaymentMethod(p.key)}
+                  className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition ${
+                    selected
+                      ? "border-brand-accent bg-brand-accent/10 text-brand-accent"
+                      : "border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700 dark:text-slate-400"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+            {paymentMethod === "cash"
+              ? "Pay your courier in cash when your package arrives."
+              : "When your package arrives you'll see your courier's bank details to transfer the fare."}
+          </p>
+        </div>
 
         <div>
           <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -247,7 +285,7 @@ export default function AddressSearchOverlay({
 
         <div className="rounded-xl border border-slate-200 p-3.5 dark:border-slate-700">
           <p className="mb-3 text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-            Pickup contact <span className="font-normal normal-case text-slate-400">(optional — defaults to you)</span>
+            Pickup contact <span className="font-normal normal-case text-slate-400">(optional - defaults to you)</span>
           </p>
           <div className="space-y-3">
             <div>
@@ -294,7 +332,7 @@ export default function AddressSearchOverlay({
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
-              Sending request…
+              Sending request...
             </>
           ) : (
             "Confirm request"

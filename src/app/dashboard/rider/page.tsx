@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import Link from "next/link";
 import {
+  Banknote,
   Bike,
   Check,
   ChevronRight,
   Eye,
+  Landmark,
   MapPin,
+  MessageCircle,
   PackageCheck,
   Phone,
   PhoneCall,
@@ -21,9 +24,12 @@ import SearchingOverlay from "@/components/map/SearchingOverlay";
 import AddressSearchOverlay, {
   MotorcycleIcon,
   type VehicleType,
+  type PaymentMethod,
 } from "@/components/map/AddressSearchOverlay";
 import BannerCarousel from "@/components/home/BannerCarousel";
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
+import ChatSheet, { useChatUnread } from "@/components/chat/ChatSheet";
+import PayNowSheet from "@/components/rides/PayNowSheet";
 
 interface CourierRequest {
   _id: string;
@@ -40,6 +46,14 @@ interface CourierRequest {
   courierName: string | null;
   courierPhone: string | null;
   createdAt: string;
+  source?: string;
+  totalFeeKobo?: number | null;
+  paymentMethod?: PaymentMethod;
+  paymentStatus?: string;
+}
+
+function naira(kobo: number): string {
+  return "\u20A6" + Math.round(kobo / 100).toLocaleString();
 }
 
 // Which step of the Booked -> Pickup -> In transit -> Delivered tracker each
@@ -111,10 +125,6 @@ const VEHICLE_CARDS: {
 
 // Once a courier is assigned and actually en route, this is when live
 // tracking matters - before that (PENDING) there's no courier to track yet.
-// Typed as string[] explicitly - without this, TypeScript narrows the
-// array to the literal union of the specific COURIER_STATUS values, and
-// .includes() on a literal-typed array rejects the plain `string` type of
-// active.status, which is what caused the earlier type error.
 const TRACKABLE_STATUSES: string[] = [
   COURIER_STATUS.ACCEPTED,
   COURIER_STATUS.PICKED_UP,
@@ -223,14 +233,18 @@ export default function RiderPage() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [chatOpen, setChatOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  // Set right after the client taps "I've paid", until the next poll confirms it.
+  const [paidOverride, setPaidOverride] = useState<string | null>(null);
+
   // Set when a delivery that was in progress disappears from the "active"
   // endpoint (delivered requests are no longer returned as active).
   const [completed, setCompleted] = useState<CourierRequest | null>(null);
   const prevActiveRef = useRef<CourierRequest | null>(null);
 
-  // Separate from `active.courierLocation` (Mongo's last-known value,
-  // fetched once) - this holds whatever crafteey-rider's live endpoint
-  // most recently returned, refreshed on its own timer during a delivery.
+  // Whatever crafteey-rider's live endpoint most recently returned,
+  // refreshed on its own timer during a delivery.
   const [liveLocation, setLiveLocation] = useState<{ lat: number; lng: number; live: boolean } | null>(
     null
   );
@@ -306,8 +320,7 @@ export default function RiderPage() {
           setLiveLocation({ lat: data.lat, lng: data.lng, live: !!data.live });
         }
       } catch {
-        // A missed poll isn't worth surfacing - the map just keeps
-        // showing the last position it has until the next one succeeds.
+        // A missed poll isn't worth surfacing - the map keeps the last position.
       }
     },
     [getIdToken]
@@ -326,8 +339,7 @@ export default function RiderPage() {
     locationPollRef.current = setInterval(() => fetchLiveLocation(requestId), 6000);
   }
 
-  // Track the courier's live position for the whole trackable stretch of
-  // the delivery, not just while searching.
+  // Track the courier's live position for the whole trackable stretch.
   useEffect(() => {
     if (active && TRACKABLE_STATUSES.includes(active.status)) {
       startLocationPolling(active._id);
@@ -339,9 +351,7 @@ export default function RiderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?._id, active?.status]);
 
-  // Keep the request's status fresh once a courier has accepted, so
-  // the Booked -> Pickup -> In transit tracker actually advances (previously
-  // the status was only re-fetched while the request was still PENDING).
+  // Keep the request's status fresh once a courier has accepted.
   useEffect(() => {
     if (statusPollRef.current) {
       clearInterval(statusPollRef.current);
@@ -361,16 +371,25 @@ export default function RiderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?._id, active?.status]);
 
-  // The "active" endpoint stops returning a request once it's
-  // delivered. If a request that had a courier assigned disappears, treat
-  // it as completed and show the success screen.
+  // The "active" endpoint stops returning a request once it's delivered.
+  // If a request that had a courier assigned disappears, show the success screen.
   useEffect(() => {
     const prev = prevActiveRef.current;
     if (!active && prev && TRACKABLE_STATUSES.includes(prev.status)) {
       setCompleted(prev);
+      setChatOpen(false);
+      setPayOpen(false);
     }
     prevActiveRef.current = active;
   }, [active]);
+
+  // A new request starts with a clean payment state.
+  useEffect(() => {
+    setPaidOverride(null);
+  }, [active?._id]);
+
+  const chatEnabled = !!active && !!active.courierName && TRACKABLE_STATUSES.includes(active.status);
+  const unread = useChatUnread(active?._id, "client", getIdToken, chatEnabled, chatOpen);
 
   function openBooking(vehicle: VehicleType | null = null) {
     setError(null);
@@ -390,6 +409,7 @@ export default function RiderPage() {
     pickupContactName?: string;
     pickupContactPhone?: string;
     vehicleType: VehicleType;
+    paymentMethod: PaymentMethod;
   }) {
     setError(null);
     setSubmitting(true);
@@ -415,6 +435,7 @@ export default function RiderPage() {
           pickupContactName: data.pickupContactName,
           pickupContactPhone: data.pickupContactPhone,
           vehicleType: data.vehicleType,
+          paymentMethod: data.paymentMethod,
         }),
       });
       if (!res.ok) {
@@ -478,8 +499,7 @@ export default function RiderPage() {
   const contactRevealed = hasActiveRequest && active!.status !== COURIER_STATUS.PENDING;
 
   // Prefer the live-polled position; fall back to whatever Mongo had at
-  // last load (e.g. the instant right after acceptance, before the first
-  // live poll has resolved) so the map never has nothing to show.
+  // last load so the map never has nothing to show.
   const courierMapLocation: LatLng | null = hasActiveRequest
     ? liveLocation
       ? { lat: liveLocation.lat, lng: liveLocation.lng }
@@ -489,6 +509,37 @@ export default function RiderPage() {
   const statusCopy = hasActiveRequest
     ? STATUS_COPY[active!.status] ?? { title: active!.status, sub: "" }
     : null;
+
+  // --- Payment (direct rides only) ---
+  const showPayment =
+    hasActiveRequest &&
+    active!.source !== "hub" &&
+    typeof active!.totalFeeKobo === "number" &&
+    active!.totalFeeKobo > 0;
+  const totalFeeKobo = showPayment ? (active!.totalFeeKobo as number) : 0;
+  const payMethod: PaymentMethod = active?.paymentMethod === "transfer" ? "transfer" : "cash";
+  const payStatus =
+    active?.paymentStatus === "collected"
+      ? "collected"
+      : paidOverride ?? active?.paymentStatus ?? "unpaid";
+  const canPayNow =
+    showPayment &&
+    payMethod === "transfer" &&
+    payStatus === "unpaid" &&
+    !!active &&
+    (active.status === COURIER_STATUS.PICKED_UP || active.status === COURIER_STATUS.EN_ROUTE);
+
+  let payHint = "";
+  if (showPayment) {
+    if (payStatus === "collected") payHint = "Payment confirmed by your courier.";
+    else if (payMethod === "cash") payHint = "Hand the cash to your courier when your package arrives.";
+    else if (payStatus === "client_marked_paid") payHint = "Waiting for your courier to confirm.";
+    else if (canPayNow) payHint = "Tap Pay now to see your courier's bank details.";
+    else payHint = "You'll see your courier's bank details once your package is on its way.";
+  }
+
+  const HeaderIcon: ComponentType<{ className?: string }> =
+    active?.vehicleType === "bicycle" ? Bike : active?.vehicleType === "cargo" ? Truck : MotorcycleIcon;
 
   return (
     <>
@@ -528,15 +579,18 @@ export default function RiderPage() {
       ) : hasActiveRequest ? (
         /* ----------- Active request / tracking ----------- */
         <div className="space-y-4">
-          <div className="rounded-2xl border border-brand-accent/20 bg-brand-accent/5 p-4">
-            <p className="text-sm font-bold text-brand dark:text-white">{statusCopy!.title}</p>
-            <p className="mt-0.5 text-xs text-steel">{statusCopy!.sub}</p>
+          {/* Status header */}
+          <div className="flex items-center gap-3 rounded-2xl border border-brand-accent/20 bg-brand-accent/5 p-4">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sunshine text-brand">
+              <HeaderIcon className="h-6 w-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-brand dark:text-white">{statusCopy!.title}</p>
+              <p className="mt-0.5 text-xs text-steel">{statusCopy!.sub}</p>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-100 bg-white px-3 py-4 shadow-card dark:border-slate-800 dark:bg-slate-900">
-            <StatusStepper current={STATUS_STEP[active!.status] ?? 0} />
-          </div>
-
+          {/* Live map */}
           <div className="relative">
             <RouteMap
               pickup={pickupCoords}
@@ -553,6 +607,7 @@ export default function RiderPage() {
             )}
           </div>
 
+          {/* Courier card */}
           {contactRevealed && active!.courierName ? (
             <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900">
               <div className="flex items-center gap-3">
@@ -570,6 +625,19 @@ export default function RiderPage() {
                       : ""}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setChatOpen(true)}
+                  aria-label={`Chat with ${active!.courierName}`}
+                  className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-accent/10 text-brand-accent transition hover:bg-brand-accent/20"
+                >
+                  <MessageCircle className="h-5 w-5" />
+                  {unread > 0 && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  )}
+                </button>
                 {active!.courierPhone && (
                   <a
                     href={`tel:${active!.courierPhone}`}
@@ -595,6 +663,51 @@ export default function RiderPage() {
               <p className="text-sm text-steel">Contact details appear once a courier accepts.</p>
             </div>
           )}
+
+          {/* Payment card */}
+          {showPayment && (
+            <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-card dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-sunshine text-brand">
+                  {payMethod === "transfer" ? (
+                    <Landmark className="h-5 w-5" />
+                  ) : (
+                    <Banknote className="h-5 w-5" />
+                  )}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-brand dark:text-white">
+                    {payMethod === "transfer" ? "Pay by bank transfer" : "Pay in cash"}
+                  </p>
+                  <p className="text-xs text-steel">{payHint}</p>
+                </div>
+                <p className="text-base font-extrabold text-brand dark:text-white">{naira(totalFeeKobo)}</p>
+              </div>
+              {payStatus === "collected" && (
+                <p className="mt-3 flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                  <Check className="h-4 w-4" /> Payment received. Thank you!
+                </p>
+              )}
+              {canPayNow && (
+                <button
+                  type="button"
+                  onClick={() => setPayOpen(true)}
+                  className="mt-3 w-full rounded-xl bg-brand-accent py-3 text-sm font-bold text-white transition active:scale-[0.98]"
+                >
+                  Pay now
+                </button>
+              )}
+              {payMethod === "transfer" && payStatus === "client_marked_paid" && (
+                <p className="mt-3 rounded-xl bg-brand-accent/10 px-3 py-2 text-center text-xs font-semibold text-brand-accent">
+                  Waiting for your courier to confirm your payment...
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-slate-100 bg-white px-3 py-4 shadow-card dark:border-slate-800 dark:bg-slate-900">
+            <StatusStepper current={STATUS_STEP[active!.status] ?? 0} />
+          </div>
 
           <RouteSummary pickup={active!.pickup} dropoff={active!.dropoff} />
         </div>
@@ -685,6 +798,32 @@ export default function RiderPage() {
 
       {searching && (
         <SearchingOverlay pickup={pickupCoords} dropoff={dropoffCoords} onCancel={handleCancelSearch} />
+      )}
+
+      {chatOpen && chatEnabled && active && (
+        <ChatSheet
+          requestId={active._id}
+          role="client"
+          title={active.courierName ?? "Your courier"}
+          subtitle="Delivery chat"
+          getIdToken={getIdToken}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
+
+      {payOpen && showPayment && active && (
+        <PayNowSheet
+          requestId={active._id}
+          amountKobo={totalFeeKobo}
+          paymentStatus={payStatus}
+          riderAppUrl={RIDER_APP_URL}
+          getIdToken={getIdToken}
+          onClose={() => setPayOpen(false)}
+          onMarkedPaid={() => {
+            setPaidOverride("client_marked_paid");
+            loadActive();
+          }}
+        />
       )}
     </>
   );

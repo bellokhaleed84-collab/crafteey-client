@@ -10,6 +10,9 @@ import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
 const VALID_VEHICLE_TYPES = ["bicycle", "motorcycle", "cargo"] as const;
 type VehicleType = (typeof VALID_VEHICLE_TYPES)[number];
 
+const VALID_PAYMENT_METHODS = ["cash", "transfer"] as const;
+type PaymentMethod = (typeof VALID_PAYMENT_METHODS)[number];
+
 export async function POST(req: NextRequest) {
   try {
     const { uid } = await verifyToken(req);
@@ -37,6 +40,7 @@ export async function POST(req: NextRequest) {
       receiverName,
       receiverPhone,
       vehicleType,
+      paymentMethod,
     } = body as {
       pickup?: string;
       dropoff?: string;
@@ -50,6 +54,7 @@ export async function POST(req: NextRequest) {
       receiverName?: string;
       receiverPhone?: string;
       vehicleType?: string;
+      paymentMethod?: string;
     };
 
     if (!pickup) {
@@ -70,6 +75,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    if (paymentMethod && !VALID_PAYMENT_METHODS.includes(paymentMethod as PaymentMethod)) {
+      return NextResponse.json(
+        { error: "paymentMethod must be one of: cash, transfer" },
+        { status: 400 }
+      );
+    }
+    const method: PaymentMethod = paymentMethod === "transfer" ? "transfer" : "cash";
 
     const existingActive = await CourierRequest.findOne({
       clientUid: uid,
@@ -79,12 +91,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "You already have an active request" }, { status: 409 });
     }
 
-    // Fare estimate at creation time, same approach as Hub checkout:
-    // pickup→dropoff distance only (no rider assigned yet, so the
-    // rider-to-pickup leg is 0). Only computed when both coordinate pairs
-    // are present — older callers or missing geocoding just skip pricing
-    // rather than failing the whole request.
+    // Fare at creation time: pickup to dropoff distance only (no rider
+    // assigned yet). Saves the full fee, the rider's share and the
+    // platform's cut, so the debt system has real numbers to work with.
+    let totalFeeKobo: number | null = null;
     let riderEarningKobo: number | null = null;
+    let platformCommissionKobo: number | null = null;
     const hasCoords =
       typeof pickupLat === "number" &&
       typeof pickupLng === "number" &&
@@ -101,7 +113,10 @@ export async function POST(req: NextRequest) {
         pickupToDropoffKm: km,
         pickupToDropoffMinutes: minutes,
       });
+      totalFeeKobo = Math.round(feeResult.deliveryFee * 100);
       riderEarningKobo = Math.round(feeResult.riderEarning * 100);
+      // Derived so rider share + platform cut always equals the total.
+      platformCommissionKobo = totalFeeKobo - riderEarningKobo;
     }
 
     const request = await CourierRequest.create({
@@ -120,7 +135,11 @@ export async function POST(req: NextRequest) {
       receiverName,
       receiverPhone,
       vehicleType,
+      totalFeeKobo,
       riderEarningKobo,
+      platformCommissionKobo,
+      paymentMethod: method,
+      paymentStatus: "unpaid",
       status: COURIER_STATUS.PENDING,
     });
 
