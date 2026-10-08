@@ -73,7 +73,7 @@ const SUPPORT_ROWS: Row[] = [
     subtitle: "Manage your password and email.",
   },
   {
-    href: "/dashboard/settings/support",
+    href: "/dashboard/settings/terms",
     icon: FileText,
     title: "Terms & Conditions",
     subtitle: "Read our terms of service and privacy policy.",
@@ -291,7 +291,7 @@ export default function SettingsPage() {
                 disabled={deleting}
                 className="flex-1 rounded-xl bg-red-600 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
               >
-                {deleting ? "Deleting…" : "Delete"}
+                {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
           </div>
