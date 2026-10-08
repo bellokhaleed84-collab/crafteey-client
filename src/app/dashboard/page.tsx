@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bell, MapPin, UtensilsCrossed, Car, Wrench, Clock, Wallet, ChevronRight } from "lucide-react";
+import { MapPin, UtensilsCrossed, Car, Wrench, Clock, Wallet, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import ActiveHubOrderBanner from "@/components/hub/ActiveHubOrderBanner";
@@ -165,22 +165,6 @@ export default function DashboardHomePage() {
       <div className="rounded-3xl bg-sunshine px-5 pb-6 pt-5">
         <div className="flex items-center justify-between">
           <span className="text-lg font-extrabold text-brand">Crafteey</span>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              aria-label="Notifications"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-brand"
-            >
-              <Bell className="h-4 w-4" />
-            </button>
-            <Link
-              href="/dashboard/settings/profile"
-              aria-label="Your profile"
-              className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white/70 text-sm font-bold text-brand"
-            >
-              {firstName.charAt(0).toUpperCase()}
-            </Link>
-          </div>
         </div>
 
         <h1 className="mt-4 text-xl font-extrabold text-brand">

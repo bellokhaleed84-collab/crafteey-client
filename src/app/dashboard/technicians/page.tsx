@@ -425,6 +425,9 @@ export default function TechniciansPage() {
                 </div>
               </div>
               {c.description && <p className="mt-3 line-clamp-2 text-sm text-steel">{c.description}</p>}
+              <Link href={`/dashboard/technicians/${c._id}`} className="mt-2 inline-block text-sm font-semibold text-brand-accent underline underline-offset-2">
+                View profile
+              </Link>
 
               {chat ? (
                 <div className="mt-3 flex gap-2">

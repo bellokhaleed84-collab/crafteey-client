@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import DashboardNav from "@/components/DashboardNav";
+import NotificationBell from "@/components/NotificationBell";
 import { FullScreenSkeleton } from "@/components/ui/Skeleton";
 
 export default function DashboardLayout({
@@ -62,9 +63,7 @@ export default function DashboardLayout({
             Crafteey
           </span>
         </Link>
-        <span className="max-w-[45%] truncate text-sm font-medium text-slate-500 dark:text-slate-400">
-          {client.name}
-        </span>
+        <NotificationBell />
       </header>
       <main className="mx-auto max-w-2xl p-6 pb-24">{children}</main>
       <DashboardNav />
