@@ -5,6 +5,7 @@ import HubProduct from "@/models/HubProduct";
 import HubVendor from "@/models/HubVendor";
 import CourierRequest from "@/models/CourierRequest";
 import { verifyTransaction } from "@/lib/paystack";
+import { notifyRidersOfRequest } from "@/lib/notifyRiders";
 
 export function newReference(orderId: string): string {
   return `hub-${orderId}-${crypto.randomBytes(4).toString("hex")}`;
@@ -17,6 +18,11 @@ export function newOrderNumber(): string {
 
 function generatePickupCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+// 4 digits the customer gives the receiver; the rider types it to finish.
+function generateDeliveryCode(): string {
+  return String(crypto.randomInt(0, 10000)).padStart(4, "0");
 }
 
 /**
@@ -61,10 +67,10 @@ export async function onOrderPaid(order: IHubOrder) {
 
     const pickupCode = generatePickupCode();
 
-    await CourierRequest.create({
+    const created = await CourierRequest.create({
       clientUid: order.firebaseUid,
       clientName: order.vendorName,
-      // CourierRequest.clientPhone is required and non-empty — an empty
+      // CourierRequest.clientPhone is required and non-empty - an empty
       // string fails Mongoose's required check the same as null/undefined,
       // which was silently killing courier-request creation for every Hub
       // order. Fall back to the delivery phone, which always exists.
@@ -91,7 +97,14 @@ export async function onOrderPaid(order: IHubOrder) {
       orderNumber: order.orderNumber,
       vendorName: vendor.name,
       pickupCode,
+
+      // Hub orders always need the delivery code.
+      deliveryCodeRequired: true,
+      deliveryCode: generateDeliveryCode(),
     });
+
+    // Push-notify matching online riders (never blocks or fails the order).
+    await notifyRidersOfRequest(String(created._id));
   } catch (e) {
     console.error("[hub] onOrderPaid failed", e);
   }

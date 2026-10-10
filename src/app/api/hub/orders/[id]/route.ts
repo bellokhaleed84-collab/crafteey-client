@@ -40,6 +40,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
           pickupLng: vendor?.lng ?? cr.pickupLng ?? null,
           dropoffLat: order.deliveryLat ?? null,
           dropoffLng: order.deliveryLng ?? null,
+          // The customer gives this to whoever receives the order.
+          // Hidden once the delivery is finished.
+          deliveryCode: cr.deliveryCodeRequired && cr.status !== "delivered" ? cr.deliveryCode ?? null : null,
         };
       }
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Banknote, Bike, Landmark, Truck } from "lucide-react";
+import { ArrowLeft, Banknote, Bike, Landmark, ShieldCheck, Truck } from "lucide-react";
 import MapboxAddressInput, { type PlaceResult } from "@/components/map/MapboxAddressInput";
 import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
 import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
@@ -29,6 +29,7 @@ interface AddressSearchOverlayProps {
     pickupContactPhone?: string;
     vehicleType: VehicleType;
     paymentMethod: PaymentMethod;
+    requireDeliveryCode: boolean;
   }) => void;
 }
 
@@ -75,6 +76,7 @@ export default function AddressSearchOverlay({
   const [note, setNote] = useState("");
   const [vehicleType, setVehicleType] = useState<VehicleType | null>(defaultVehicleType);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [requireDeliveryCode, setRequireDeliveryCode] = useState<boolean>(false);
   const [estimatedFee, setEstimatedFee] = useState<number | null>(null);
 
   const [receiverName, setReceiverName] = useState("");
@@ -129,6 +131,7 @@ export default function AddressSearchOverlay({
       pickupContactPhone: pickupContactPhone.trim() || undefined,
       vehicleType: vehicleType!,
       paymentMethod,
+      requireDeliveryCode,
     });
   }
 
@@ -238,6 +241,39 @@ export default function AddressSearchOverlay({
               : "When your package arrives you'll see your courier's bank details to transfer the fare."}
           </p>
         </div>
+
+        {/* Delivery code switch */}
+        <button
+          type="button"
+          onClick={() => setRequireDeliveryCode((v) => !v)}
+          aria-pressed={requireDeliveryCode}
+          className={`flex w-full items-center gap-3 rounded-xl border p-3.5 text-left transition ${
+            requireDeliveryCode
+              ? "border-brand-accent bg-brand-accent/10"
+              : "border-slate-200 dark:border-slate-700"
+          }`}
+        >
+          <ShieldCheck className="h-6 w-6 shrink-0 text-brand-accent" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-bold text-brand dark:text-white">Delivery code</span>
+            <span className="block text-xs text-slate-500 dark:text-slate-400">
+              {requireDeliveryCode
+                ? "You'll get a 4-digit code. Give it to the receiver. Your courier must enter it to finish."
+                : "Turn on for extra safety. The receiver must give your courier a 4-digit code."}
+            </span>
+          </span>
+          <span
+            className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+              requireDeliveryCode ? "bg-brand-accent" : "bg-slate-300 dark:bg-slate-700"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${
+                requireDeliveryCode ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </span>
+        </button>
 
         <div>
           <label className="mb-1 block text-xs font-semibold text-slate-700 dark:text-slate-300">

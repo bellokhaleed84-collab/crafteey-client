@@ -42,6 +42,7 @@ export interface HubOrderCourierDTO {
   pickupLng: number | null;
   dropoffLat: number | null;
   dropoffLng: number | null;
+  deliveryCode?: string | null;
 }
 
 export interface HubOrderDTO {

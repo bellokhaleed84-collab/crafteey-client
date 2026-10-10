@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken, AuthError } from "@/middleware/auth";
 import { connectToDatabase } from "@/lib/mongodb";
@@ -6,12 +7,17 @@ import Client from "@/models/Client";
 import { COURIER_STATUS } from "@/lib/constants";
 import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
 import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
+import { notifyRidersOfRequest } from "@/lib/notifyRiders";
 
 const VALID_VEHICLE_TYPES = ["bicycle", "motorcycle", "cargo"] as const;
 type VehicleType = (typeof VALID_VEHICLE_TYPES)[number];
 
 const VALID_PAYMENT_METHODS = ["cash", "transfer"] as const;
 type PaymentMethod = (typeof VALID_PAYMENT_METHODS)[number];
+
+function generateDeliveryCode(): string {
+  return String(crypto.randomInt(0, 10000)).padStart(4, "0");
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -41,6 +47,7 @@ export async function POST(req: NextRequest) {
       receiverPhone,
       vehicleType,
       paymentMethod,
+      requireDeliveryCode,
     } = body as {
       pickup?: string;
       dropoff?: string;
@@ -55,6 +62,7 @@ export async function POST(req: NextRequest) {
       receiverPhone?: string;
       vehicleType?: string;
       paymentMethod?: string;
+      requireDeliveryCode?: boolean;
     };
 
     if (!pickup) {
@@ -82,6 +90,9 @@ export async function POST(req: NextRequest) {
       );
     }
     const method: PaymentMethod = paymentMethod === "transfer" ? "transfer" : "cash";
+
+    // The customer chooses whether the receiver must give a code at hand-over.
+    const wantsDeliveryCode = requireDeliveryCode === true;
 
     const existingActive = await CourierRequest.findOne({
       clientUid: uid,
@@ -140,8 +151,13 @@ export async function POST(req: NextRequest) {
       platformCommissionKobo,
       paymentMethod: method,
       paymentStatus: "unpaid",
+      deliveryCodeRequired: wantsDeliveryCode,
+      deliveryCode: wantsDeliveryCode ? generateDeliveryCode() : null,
       status: COURIER_STATUS.PENDING,
     });
+
+    // Push-notify matching online riders (never blocks or fails the booking).
+    await notifyRidersOfRequest(String(request._id));
 
     return NextResponse.json({ request }, { status: 201 });
   } catch (err) {

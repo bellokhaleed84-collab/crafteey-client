@@ -14,6 +14,7 @@ import {
   PackageCheck,
   Phone,
   PhoneCall,
+  ShieldCheck,
   Truck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,6 +51,8 @@ interface CourierRequest {
   totalFeeKobo?: number | null;
   paymentMethod?: PaymentMethod;
   paymentStatus?: string;
+  deliveryCodeRequired?: boolean;
+  deliveryCode?: string | null;
 }
 
 function naira(kobo: number): string {
@@ -180,6 +183,31 @@ function StatusStepper({ current }: { current: number }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function DeliveryCodeCard({ code }: { code: string }) {
+  return (
+    <div className="rounded-2xl border border-brand-accent/30 bg-brand-accent/5 p-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-5 w-5 text-brand-accent" />
+        <p className="text-sm font-bold text-brand dark:text-white">Delivery code</p>
+      </div>
+      <div className="mt-3 flex justify-center gap-2">
+        {code.split("").map((digit, i) => (
+          <span
+            key={i}
+            className="flex h-14 w-12 items-center justify-center rounded-xl bg-white text-3xl font-extrabold text-brand shadow-card dark:bg-slate-900 dark:text-white"
+          >
+            {digit}
+          </span>
+        ))}
+      </div>
+      <p className="mt-3 text-center text-xs text-steel">
+        Give this code to the person receiving your package. Your courier will ask for it before
+        finishing the delivery. Don&apos;t share it before the package arrives.
+      </p>
     </div>
   );
 }
@@ -410,6 +438,7 @@ export default function RiderPage() {
     pickupContactPhone?: string;
     vehicleType: VehicleType;
     paymentMethod: PaymentMethod;
+    requireDeliveryCode: boolean;
   }) {
     setError(null);
     setSubmitting(true);
@@ -436,6 +465,7 @@ export default function RiderPage() {
           pickupContactPhone: data.pickupContactPhone,
           vehicleType: data.vehicleType,
           paymentMethod: data.paymentMethod,
+          requireDeliveryCode: data.requireDeliveryCode,
         }),
       });
       if (!res.ok) {
@@ -509,6 +539,13 @@ export default function RiderPage() {
   const statusCopy = hasActiveRequest
     ? STATUS_COPY[active!.status] ?? { title: active!.status, sub: "" }
     : null;
+
+  // --- Delivery code (shown to the customer who booked) ---
+  const showDeliveryCode =
+    hasActiveRequest &&
+    !!active!.deliveryCodeRequired &&
+    !!active!.deliveryCode &&
+    TRACKABLE_STATUSES.includes(active!.status);
 
   // --- Payment (direct rides only) ---
   const showPayment =
@@ -663,6 +700,9 @@ export default function RiderPage() {
               <p className="text-sm text-steel">Contact details appear once a courier accepts.</p>
             </div>
           )}
+
+          {/* Delivery code card */}
+          {showDeliveryCode && <DeliveryCodeCard code={active!.deliveryCode as string} />}
 
           {/* Payment card */}
           {showPayment && (

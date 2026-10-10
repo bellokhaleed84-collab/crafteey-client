@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Check, Phone } from "lucide-react";
+import { ArrowLeft, Check, Phone, ShieldCheck } from "lucide-react";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
@@ -195,6 +195,9 @@ export default function OrderPage() {
 
   const hasMapData: boolean = Boolean(pickupCoords || dropoffCoords || courierMapLocation);
 
+  const deliveryCode: string | null =
+    courier && courier.deliveryCode && order && order.status !== "delivered" ? courier.deliveryCode : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -308,6 +311,28 @@ export default function OrderPage() {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {deliveryCode && (
+            <div className="rounded-2xl border border-brand-accent/30 bg-brand-accent/5 p-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-brand-accent" />
+                <p className="text-sm font-bold text-brand">Delivery code</p>
+              </div>
+              <div className="mt-3 flex justify-center gap-2">
+                {deliveryCode.split("").map((digit, i) => (
+                  <span
+                    key={i}
+                    className="flex h-14 w-12 items-center justify-center rounded-xl bg-white text-3xl font-extrabold text-brand shadow-card"
+                  >
+                    {digit}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-3 text-center text-xs text-steel">
+                Give this code to your rider when your order arrives. Don&apos;t share it before then.
+              </p>
             </div>
           )}
 
