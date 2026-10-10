@@ -11,6 +11,7 @@ import { usePaystackPopup } from "@/lib/hub/usePaystackPopup";
 import { formatNaira, type HubOrderStatus } from "@/lib/hub/config";
 import type { HubOrderDTO } from "@/lib/hub/types";
 import RouteMap, { type LatLng } from "@/components/map/RouteMap";
+import RiderRatingCard from "@/components/rides/RiderRatingCard";
 
 const STEPS: { key: HubOrderStatus; label: string }[] = [
   { key: "paid", label: "Order placed" },
@@ -312,6 +313,11 @@ export default function OrderPage() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Rate the rider once the order is delivered */}
+          {order.status === "delivered" && courier?.requestId && (
+            <RiderRatingCard requestId={courier.requestId} riderName={courier.name} />
           )}
 
           {deliveryCode && (

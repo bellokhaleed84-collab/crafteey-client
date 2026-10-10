@@ -31,6 +31,8 @@ import BannerCarousel from "@/components/home/BannerCarousel";
 import { Skeleton, SkeletonList } from "@/components/ui/Skeleton";
 import ChatSheet, { useChatUnread } from "@/components/chat/ChatSheet";
 import PayNowSheet from "@/components/rides/PayNowSheet";
+import RiderRatingCard from "@/components/rides/RiderRatingCard";
+import UnratedRiderPrompt from "@/components/rides/UnratedRiderPrompt";
 
 interface CourierRequest {
   _id: string;
@@ -597,6 +599,9 @@ export default function RiderPage() {
 
           <RouteSummary pickup={completed.pickup} dropoff={completed.dropoff} />
 
+          {/* Rate the rider now, or later from History */}
+          <RiderRatingCard requestId={completed._id} riderName={completed.courierName} />
+
           <div className="space-y-3">
             <button
               type="button"
@@ -606,7 +611,7 @@ export default function RiderPage() {
               Book another delivery
             </button>
             <Link
-              href="/dashboard/history"
+              href={`/dashboard/deliveries/${completed._id}`}
               className="block w-full rounded-2xl border border-brand-accent px-4 py-3.5 text-center text-sm font-bold text-brand-accent transition hover:bg-brand-accent/5"
             >
               View details
@@ -755,6 +760,9 @@ export default function RiderPage() {
         /* ----------- Idle: choose a ride type ----------- */
         <div className="space-y-6">
           <BannerCarousel placement="rides" fallback={<RidesHeaderCard />} />
+
+          {/* A recent delivery they have not rated yet */}
+          <UnratedRiderPrompt />
 
           <div>
             <p className="text-base font-bold text-brand dark:text-white">Choose your ride type</p>

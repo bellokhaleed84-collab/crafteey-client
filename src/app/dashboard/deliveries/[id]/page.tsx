@@ -7,6 +7,7 @@ import { ArrowLeft, Phone, Package, Store } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { COURIER_STATUS } from "@/lib/constants";
 import { DetailSkeleton } from "@/components/ui/Skeleton";
+import RiderRatingCard from "@/components/rides/RiderRatingCard";
 
 interface Delivery {
   _id: string;
@@ -232,6 +233,9 @@ export default function DeliveryDetailPage() {
           {cancelled ? "No courier was assigned." : "Courier details appear once a courier accepts."}
         </div>
       )}
+
+      {/* Rate the rider (or see the rating already given) */}
+      {delivered && hasCourier && <RiderRatingCard requestId={data._id} riderName={data.courierName} />}
 
       {/* Timeline */}
       <div className={CARD}>
