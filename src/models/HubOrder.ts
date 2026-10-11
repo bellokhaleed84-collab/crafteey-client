@@ -13,13 +13,22 @@ export interface IHubOrder {
     productId: Types.ObjectId;
     name: string;
     imageUrl?: string;
-    /** price of one plate including the extras picked */
+    /** price of one plate including the extras picked, BEFORE any promotion */
     unitPriceKobo: number;
     quantity: number;
     /** copy of the extras picked, so later menu edits never change this order */
     options?: PickedOption[];
+    /** promotion discount on this whole line, in kobo */
+    discountKobo?: number;
+    /** e.g. "20% off" */
+    promoLabel?: string;
   }[];
+  /** AFTER promotions. This is what the vendor payout and commission use. */
   subtotalKobo: number;
+  /** before promotions (only set when a promotion applied) */
+  grossSubtotalKobo?: number;
+  /** total promotion discount (only set when a promotion applied) */
+  discountKobo?: number;
   deliveryFeeKobo: number;
   totalKobo: number;
   vendorTier: "basic" | "regular" | "premium";
@@ -69,9 +78,13 @@ const HubOrderSchema = new Schema<IHubOrder>(
             imageUrl: String,
           },
         ],
+        discountKobo: { type: Number, min: 0 },
+        promoLabel: String,
       },
     ],
     subtotalKobo: { type: Number, required: true },
+    grossSubtotalKobo: Number,
+    discountKobo: Number,
     deliveryFeeKobo: { type: Number, required: true },
     totalKobo: { type: Number, required: true },
     vendorTier: { type: String, enum: ["basic", "regular", "premium"], required: true },

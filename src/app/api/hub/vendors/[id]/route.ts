@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import HubVendor from "@/models/HubVendor";
 import HubProduct from "@/models/HubProduct";
+import { loadActivePromotions } from "@/lib/hub/activePromotions";
 import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const products = await HubProduct.find({ vendorId: params.id, isActive: true })
       .sort({ createdAt: -1 })
       .lean();
+    const promotions = await loadActivePromotions(params.id);
 
     return NextResponse.json({
       vendor: {
@@ -33,6 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
         rating: v.rating ?? null,
         reviewCount: v.reviewCount ?? 0,
       },
+      promotions,
       products: products.map((p) => ({
         _id: String(p._id),
         name: p.name,

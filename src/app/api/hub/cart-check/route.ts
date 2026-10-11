@@ -4,12 +4,14 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { verifyToken } from "@/middleware/auth";
 import HubProduct from "@/models/HubProduct";
 import HubVendor from "@/models/HubVendor";
+import { loadActivePromotions } from "@/lib/hub/activePromotions";
 import { fail, handleError } from "@/lib/hub/http";
 
 export const dynamic = "force-dynamic";
 
 // Live state of the items in a cart: current price, availability, options, and
 // whether the store is open. Items missing from the response no longer exist.
+// Also sends the shop's running promotions so the cart can show the discount.
 export async function POST(req: NextRequest) {
   try {
     await verifyToken(req);
@@ -33,9 +35,11 @@ export async function POST(req: NextRequest) {
     const vendor = vendorId
       ? await HubVendor.findOne({ _id: vendorId, isActive: true }).select("name isOpen").lean()
       : null;
+    const promotions = vendor ? await loadActivePromotions(vendor._id) : [];
 
     return NextResponse.json({
       vendor: vendor ? { _id: String(vendor._id), name: vendor.name, isOpen: vendor.isOpen } : null,
+      promotions,
       items: products.map((p) => ({
         productId: String(p._id),
         name: p.name,

@@ -9,6 +9,7 @@ import { useCart, type NewCartItem } from "@/contexts/CartContext";
 import { authedFetch } from "@/lib/chatApi";
 import { formatNaira } from "@/lib/hub/config";
 import { hasOptions, priceSelection, type OptionGroup, type Selection } from "@/lib/hub/options";
+import { appliesTo, bestForLine, discountForLine, type PromoLite } from "@/lib/pricing/promotions";
 import ReviewsSheet from "@/components/ReviewsSheet";
 import RatingSheet from "@/components/RatingSheet";
 
@@ -16,6 +17,7 @@ import RatingSheet from "@/components/RatingSheet";
 const CARD = "bg-white shadow-card dark:bg-slate-900 dark:shadow-none dark:ring-1 dark:ring-slate-800";
 const FOOD_EMOJI = "\uD83C\uDF7D\uFE0F";
 const MAX_PLATES = 50;
+const TAG = "rounded-full bg-sunshine px-2 py-0.5 text-[10px] font-bold text-brand";
 
 interface VendorDTO {
   _id: string;
@@ -53,6 +55,22 @@ function fmtTime(t: string | null): string | null {
   return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h >= 12 ? "PM" : "AM"}`;
 }
 
+// What to show on a food: a lower price for percent/amount off, and a tag for buy-X-get-Y.
+function promoInfo(promos: PromoLite[], productId: string, priceKobo: number) {
+  let sale: { label: string; saleKobo: number } | null = null;
+  let bonus: string | null = null;
+  for (const p of promos) {
+    if (!appliesTo(p, productId)) continue;
+    if (p.type === "buy_get") {
+      if (!bonus) bonus = p.label;
+      continue;
+    }
+    const d = discountForLine(p, priceKobo, 1);
+    if (d > 0 && (!sale || priceKobo - d < sale.saleKobo)) sale = { label: p.label, saleKobo: priceKobo - d };
+  }
+  return { sale, bonus };
+}
+
 function ChoicePic({ url, name }: { url?: string; name: string }) {
   return (
     <span className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-surface-muted text-xl dark:bg-slate-800">
@@ -68,6 +86,7 @@ function ChoicePic({ url, name }: { url?: string; name: string }) {
 
 function FoodSheet({
   product,
+  promos,
   vendorOpen,
   plainQty,
   onAddPlain,
@@ -76,6 +95,7 @@ function FoodSheet({
   onClose,
 }: {
   product: ProductDTO;
+  promos: PromoLite[];
   vendorOpen: boolean;
   plainQty: number;
   onAddPlain: () => void;
@@ -112,6 +132,11 @@ function FoodSheet({
     .map(([choiceId, quantity]) => ({ choiceId, quantity }));
   const priced = priceSelection(groups, selections);
   const unitKobo = product.priceKobo + (priced.ok ? priced.extrasKobo : 0);
+
+  // Promotion on the plates picked here (same rule the server uses).
+  const lineBest = bestForLine(promos, product._id, unitKobo, plates);
+  const lineNetKobo = unitKobo * plates - (lineBest?.discountKobo ?? 0);
+  const info = promoInfo(promos, product._id, product.priceKobo);
 
   function pickSingle(g: OptionGroup, choiceId: string) {
     setPicks((prev) => {
@@ -161,9 +186,24 @@ function FoodSheet({
             <div>
               <h2 className="text-xl font-extrabold leading-tight text-brand dark:text-white">{product.name}</h2>
               <p className="mt-1 text-lg font-extrabold text-brand dark:text-white">
-                {formatNaira(product.priceKobo)}
+                {info.sale ? (
+                  <>
+                    {formatNaira(info.sale.saleKobo)}
+                    <span className="ml-2 text-sm font-medium text-steel line-through">
+                      {formatNaira(product.priceKobo)}
+                    </span>
+                  </>
+                ) : (
+                  formatNaira(product.priceKobo)
+                )}
                 {product.unit && <span className="ml-1 text-xs font-medium text-steel">{"/ " + product.unit}</span>}
               </p>
+              {(info.sale || info.bonus) && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {info.sale && <span className={TAG}>{info.sale.label}</span>}
+                  {info.bonus && <span className={TAG}>{info.bonus}</span>}
+                </div>
+              )}
             </div>
 
             {product.description ? (
@@ -270,38 +310,45 @@ function FoodSheet({
               Sold out
             </p>
           ) : configurable ? (
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
+            <div className="space-y-2">
+              {lineBest && (
+                <p className="text-center text-xs font-semibold text-green-700 dark:text-green-400">
+                  {lineBest.label} {"\u2212"} {formatNaira(lineBest.discountKobo)}
+                </p>
+              )}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPlates((n) => Math.max(1, n - 1))}
+                    aria-label="Fewer plates"
+                    className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-brand dark:bg-slate-800 dark:text-white"
+                  >
+                    <Minus className="h-5 w-5" />
+                  </button>
+                  <span className="w-6 text-center text-lg font-extrabold text-brand dark:text-white">{plates}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPlates((n) => Math.min(MAX_PLATES, n + 1))}
+                    aria-label="More plates"
+                    className="flex h-12 w-12 items-center justify-center rounded-xl bg-sunshine text-brand"
+                  >
+                    <Plus className="h-5 w-5" />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setPlates((n) => Math.max(1, n - 1))}
-                  aria-label="Fewer plates"
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-brand dark:bg-slate-800 dark:text-white"
+                  disabled={!canOrder || !priced.ok}
+                  onClick={() => priced.ok && onAddConfigured(priced.normalized, plates)}
+                  className="h-12 flex-1 rounded-xl bg-sunshine px-3 text-sm font-extrabold text-brand disabled:opacity-50"
                 >
-                  <Minus className="h-5 w-5" />
-                </button>
-                <span className="w-6 text-center text-lg font-extrabold text-brand dark:text-white">{plates}</span>
-                <button
-                  type="button"
-                  onClick={() => setPlates((n) => Math.min(MAX_PLATES, n + 1))}
-                  aria-label="More plates"
-                  className="flex h-12 w-12 items-center justify-center rounded-xl bg-sunshine text-brand"
-                >
-                  <Plus className="h-5 w-5" />
+                  {!vendorOpen
+                    ? "Closed"
+                    : priced.ok
+                    ? "Add " + plates + " to cart \u00B7 " + formatNaira(lineNetKobo)
+                    : priced.error}
                 </button>
               </div>
-              <button
-                type="button"
-                disabled={!canOrder || !priced.ok}
-                onClick={() => priced.ok && onAddConfigured(priced.normalized, plates)}
-                className="h-12 flex-1 rounded-xl bg-sunshine px-3 text-sm font-extrabold text-brand disabled:opacity-50"
-              >
-                {!vendorOpen
-                  ? "Closed"
-                  : priced.ok
-                  ? "Add " + plates + " to cart \u00B7 " + formatNaira(unitKobo * plates)
-                  : priced.error}
-              </button>
             </div>
           ) : plainQty > 0 ? (
             <div className="flex items-center gap-3">
@@ -341,7 +388,9 @@ function FoodSheet({
               className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-sunshine text-sm font-extrabold text-brand disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              {vendorOpen ? "Add to cart \u00B7 " + formatNaira(product.priceKobo) : "Closed"}
+              {vendorOpen
+                ? "Add to cart \u00B7 " + formatNaira(info.sale ? info.sale.saleKobo : product.priceKobo)
+                : "Closed"}
             </button>
           )}
         </div>
@@ -357,6 +406,7 @@ export default function VendorPage() {
 
   const [vendor, setVendor] = useState<VendorDTO | null>(null);
   const [products, setProducts] = useState<ProductDTO[]>([]);
+  const [promos, setPromos] = useState<PromoLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [section, setSection] = useState("All");
@@ -378,12 +428,13 @@ export default function VendorPage() {
       .then(async (r) => {
         const d = await r.json().catch(() => null);
         if (!r.ok) throw new Error(d?.error || "Couldn't load this vendor");
-        return d as { vendor: VendorDTO; products: ProductDTO[] };
+        return d as { vendor: VendorDTO; products: ProductDTO[]; promotions?: PromoLite[] };
       })
       .then((d) => {
         if (cancelled) return;
         setVendor(d.vendor);
         setProducts(d.products);
+        setPromos(d.promotions ?? []);
       })
       .catch((e) => {
         // A failed refresh (after a new review) keeps the page as it is.
@@ -621,6 +672,7 @@ export default function VendorPage() {
             const qty = hydrated ? quantityOf(p._id) : 0;
             const canOrder = p.available && vendor.isOpen;
             const configurable = hasOptions(p.optionGroups);
+            const promo = promoInfo(promos, p._id, p.priceKobo);
             const lineKey = p._id;
             return (
               <div
@@ -647,9 +699,24 @@ export default function VendorPage() {
                     <p className="truncate text-sm font-bold text-brand dark:text-white">{p.name}</p>
                     {p.description && <p className="line-clamp-2 text-xs text-steel">{p.description}</p>}
                     <p className="mt-1 text-sm font-extrabold text-brand dark:text-white">
-                      {formatNaira(p.priceKobo)}
+                      {promo.sale ? (
+                        <>
+                          {formatNaira(promo.sale.saleKobo)}
+                          <span className="ml-1.5 text-[11px] font-medium text-steel line-through">
+                            {formatNaira(p.priceKobo)}
+                          </span>
+                        </>
+                      ) : (
+                        formatNaira(p.priceKobo)
+                      )}
                       {p.unit && <span className="ml-1 text-[11px] font-medium text-steel">{"/ " + p.unit}</span>}
                     </p>
+                    {(promo.sale || promo.bonus) && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {promo.sale && <span className={TAG}>{promo.sale.label}</span>}
+                        {promo.bonus && <span className={TAG}>{promo.bonus}</span>}
+                      </div>
+                    )}
                     {configurable && <p className="text-[11px] font-semibold text-brand-accent">Extras available</p>}
                   </div>
 
@@ -729,6 +796,7 @@ export default function VendorPage() {
         <FoodSheet
           key={selected._id}
           product={selected}
+          promos={promos}
           vendorOpen={vendor.isOpen}
           plainQty={hydrated ? quantityOf(selected._id) : 0}
           onAddPlain={() => add(selected)}

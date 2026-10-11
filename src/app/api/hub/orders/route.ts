@@ -11,6 +11,8 @@ import { initializeTransaction } from "@/lib/paystack";
 import { calculateVendorPayout } from "@/lib/pricing/vendorCommission";
 import { calculateDeliveryFee } from "@/lib/pricing/calculateDeliveryFee";
 import { haversineKm, estimateMinutes } from "@/lib/pricing/distance";
+import { bestForLine } from "@/lib/pricing/promotions";
+import { loadActivePromotions } from "@/lib/hub/activePromotions";
 import { fail, handleError } from "@/lib/hub/http";
 import { priceSelection, type OptionGroup, type PickedOption, type Selection } from "@/lib/hub/options";
 
@@ -126,6 +128,8 @@ export async function POST(req: NextRequest) {
       unitPriceKobo: number;
       quantity: number;
       options: PickedOption[];
+      discountKobo?: number;
+      promoLabel?: string;
     }[] = [];
     for (const line of lines) {
       const p = byId.get(line.productId)!;
@@ -141,7 +145,23 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const subtotalKobo = orderItems.reduce((sum, it) => sum + it.unitPriceKobo * it.quantity, 0);
+    // Promotions running right now for this shop. The best one wins per line;
+    // they never stack. The vendor pays for the discount: the subtotal below is
+    // AFTER the discount, so the vendor payout and Crafteey's commission both
+    // follow the lower price. Delivery fee and rider earnings are not touched.
+    const promos = await loadActivePromotions(vendor._id);
+    let grossKobo = 0;
+    let discountKobo = 0;
+    for (const it of orderItems) {
+      grossKobo += it.unitPriceKobo * it.quantity;
+      const best = bestForLine(promos, String(it.productId), it.unitPriceKobo, it.quantity);
+      if (best) {
+        it.discountKobo = best.discountKobo;
+        it.promoLabel = best.label;
+        discountKobo += best.discountKobo;
+      }
+    }
+    const subtotalKobo = grossKobo - discountKobo;
 
     const km = haversineKm({ lat: vendor.lat, lng: vendor.lng }, { lat: deliveryLat, lng: deliveryLng });
     const minutes = estimateMinutes(km, vehicleType);
@@ -169,6 +189,7 @@ export async function POST(req: NextRequest) {
       orderNumber: newOrderNumber(),
       items: orderItems,
       subtotalKobo,
+      ...(discountKobo > 0 ? { grossSubtotalKobo: grossKobo, discountKobo } : {}),
       deliveryFeeKobo,
       totalKobo,
       vendorTier: vendor.tier,

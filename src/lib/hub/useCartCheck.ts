@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCart, unitPriceOf } from "@/contexts/CartContext";
 import { useHubApi } from "@/lib/hub/useHubApi";
 import { priceSelection, type OptionGroup } from "@/lib/hub/options";
+import { bestForLine, type PromoLite } from "@/lib/pricing/promotions";
 
 type CheckResponse = {
   vendor: { _id: string; name: string; isOpen: boolean } | null;
+  promotions?: PromoLite[];
   items: {
     productId: string;
     name: string;
@@ -18,11 +20,14 @@ type CheckResponse = {
 };
 
 export interface LiveItem {
-  /** price of ONE plate right now, including its extras */
+  /** price of ONE plate right now, including its extras (before any promotion) */
   livePriceKobo: number;
   priceChanged: boolean;
   issue: string | null; // why this item can't be ordered right now
   removable: boolean; // true = item is gone/unavailable; false = fixable by lowering quantity
+  /** promotion discount on this whole line, in kobo (0 = none) */
+  discountKobo: number;
+  promoLabel: string | null;
 }
 
 /**
@@ -85,6 +90,7 @@ export function useCartCheck() {
   return useMemo(() => {
     const live = new Map<string, CheckResponse["items"][number]>();
     data?.items.forEach((i) => live.set(i.productId, i));
+    const promos = data?.promotions ?? [];
 
     // plates of each product across all of its lines (for stock)
     const totals = new Map<string, number>();
@@ -92,6 +98,7 @@ export function useCartCheck() {
 
     const byLine: Record<string, LiveItem> = {};
     let liveSubtotalKobo = 0;
+    let liveDiscountKobo = 0;
     let anyPriceChanged = false;
     const removableIds: string[] = [];
     let anyIssue = false;
@@ -139,8 +146,21 @@ export function useCartCheck() {
       if (issue) anyIssue = true;
       if (removable) removableIds.push(item.lineId);
 
-      byLine[item.lineId] = { livePriceKobo, priceChanged, issue, removable };
+      // Same rule the server uses when it prices the order.
+      const best =
+        l && !issue ? bestForLine(promos, item.productId, livePriceKobo, item.quantity) : null;
+      const discountKobo = best?.discountKobo ?? 0;
+
+      byLine[item.lineId] = {
+        livePriceKobo,
+        priceChanged,
+        issue,
+        removable,
+        discountKobo,
+        promoLabel: best?.label ?? null,
+      };
       liveSubtotalKobo += livePriceKobo * item.quantity;
+      liveDiscountKobo += discountKobo;
     }
 
     const storeClosed = data?.vendor ? !data.vendor.isOpen : false;
@@ -152,7 +172,12 @@ export function useCartCheck() {
       byLine,
       // kept so older screens that read byProduct[productId] keep working for items without options
       byProduct: byLine,
+      /** before promotions (older screens still read this) */
       liveSubtotalKobo,
+      /** total promotion discount */
+      liveDiscountKobo,
+      /** after promotions: what the customer really pays for the food */
+      liveNetSubtotalKobo: liveSubtotalKobo - liveDiscountKobo,
       anyPriceChanged,
       removableIds,
       hasBlockingIssue: storeClosed || anyIssue,

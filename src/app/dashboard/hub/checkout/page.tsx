@@ -154,7 +154,8 @@ export default function CheckoutPage() {
           accessCode = r.accessCode;
         }
       } else {
-        // Only which food, how many plates and which options are sent. The server works out the prices.
+        // Only which food, how many plates and which options are sent. The server works out the prices
+        // and any promotion discount.
         const r = await api<{ orderId: string; accessCode: string }>("/api/hub/orders", {
           method: "POST",
           body: JSON.stringify({
@@ -213,7 +214,8 @@ export default function CheckoutPage() {
 
   const busy = stage !== "idle";
   const blocked = check.hasBlockingIssue;
-  const totalKobo = fee ? check.liveSubtotalKobo + fee.deliveryFeeKobo : check.liveSubtotalKobo;
+  // Food after promotions + delivery: the same number the server charges.
+  const totalKobo = fee ? check.liveNetSubtotalKobo + fee.deliveryFeeKobo : check.liveNetSubtotalKobo;
   const walletShort =
     payMethod === "wallet" && fee !== null && walletBalanceKobo !== null && walletBalanceKobo < totalKobo;
 
@@ -327,6 +329,11 @@ export default function CheckoutPage() {
                   {i.picked.map((o) => o.quantity + " \u00D7 " + o.choiceName).join(", ")}
                 </p>
               )}
+              {live && live.discountKobo > 0 && (
+                <p className="text-xs font-semibold text-green-700">
+                  {live.promoLabel} {"\u2212"} {formatNaira(live.discountKobo)}
+                </p>
+              )}
               {live?.issue && <p className="text-xs font-semibold text-red-600">{live.issue}</p>}
             </div>
           );
@@ -336,6 +343,14 @@ export default function CheckoutPage() {
             <span>Subtotal</span>
             <span className="font-semibold text-brand">{formatNaira(check.liveSubtotalKobo)}</span>
           </div>
+          {check.liveDiscountKobo > 0 && (
+            <div className="flex justify-between text-green-700">
+              <span>Promotion</span>
+              <span className="font-semibold">
+                {"\u2212"} {formatNaira(check.liveDiscountKobo)}
+              </span>
+            </div>
+          )}
           <div className="flex justify-between text-steel">
             <span>Delivery fee {fee && `(${fee.distanceKm}km)`}</span>
             <span className="font-semibold text-brand">
