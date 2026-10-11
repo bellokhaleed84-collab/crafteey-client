@@ -1,18 +1,50 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { useCart, unitPriceOf } from "@/contexts/CartContext";
 import { useCartCheck } from "@/lib/hub/useCartCheck";
 import { formatNaira } from "@/lib/hub/config";
+import { bestForLine, type PromoLite } from "@/lib/pricing/promotions";
 
 export default function CartPage() {
   const { items, hydrated, vendorName, setQuantity, removeItem, clear } = useCart();
   const check = useCartCheck();
 
+  // Promotions running at this shop (same list the vendor page uses).
+  const vendorId = items[0]?.vendorId;
+  const [promos, setPromos] = useState<PromoLite[]>([]);
+  useEffect(() => {
+    if (!vendorId) {
+      setPromos([]);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/hub/vendors/${vendorId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setPromos((d?.promotions as PromoLite[] | undefined) ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [vendorId]);
+
   function removeUnavailable() {
     check.removableIds.forEach((id) => removeItem(id));
   }
+
+  // Best promotion per line, worked out with the same rule the server uses.
+  function lineDeal(i: (typeof items)[number]) {
+    const live = check.byLine[i.lineId];
+    if (live?.issue) return null;
+    const unit = live?.livePriceKobo ?? unitPriceOf(i);
+    return bestForLine(promos, i.productId, unit, i.quantity);
+  }
+  const totalDiscountKobo = items.reduce((sum, i) => sum + (lineDeal(i)?.discountKobo ?? 0), 0);
+  const payableKobo = Math.max(0, check.liveSubtotalKobo - totalDiscountKobo);
 
   return (
     <div className="space-y-6">
@@ -79,6 +111,7 @@ export default function CartPage() {
             {items.map((i) => {
               const live = check.byLine[i.lineId];
               const price = live?.livePriceKobo ?? unitPriceOf(i);
+              const deal = lineDeal(i);
               return (
                 <div
                   key={i.lineId}
@@ -106,14 +139,28 @@ export default function CartPage() {
                       </ul>
                     )}
                     <p className="text-xs font-bold text-brand-accent">
-                      {formatNaira(price * i.quantity)}
-                      {i.quantity > 1 && (
+                      {deal ? (
+                        <>
+                          {formatNaira(price * i.quantity - deal.discountKobo)}
+                          <span className="ml-1.5 font-medium text-steel line-through">
+                            {formatNaira(price * i.quantity)}
+                          </span>
+                        </>
+                      ) : (
+                        formatNaira(price * i.quantity)
+                      )}
+                      {i.quantity > 1 && !deal && (
                         <span className="ml-1.5 font-medium text-steel">({formatNaira(price)} each)</span>
                       )}
                       {live?.priceChanged && (
                         <span className="ml-1.5 font-medium text-amber-700">(price updated)</span>
                       )}
                     </p>
+                    {deal && (
+                      <span className="mt-0.5 inline-block rounded-full bg-sunshine px-2 py-0.5 text-[10px] font-bold text-brand">
+                        {deal.label}
+                      </span>
+                    )}
                     {live?.issue && <p className="text-xs font-semibold text-red-600">{live.issue}</p>}
                     <div className="mt-1.5 flex items-center gap-1.5">
                       <button
@@ -149,10 +196,30 @@ export default function CartPage() {
           </div>
 
           <div className="space-y-2 rounded-2xl bg-white p-4 text-sm shadow-card">
-            <div className="flex justify-between text-steel">
-              <span>Subtotal</span>
-              <span className="font-semibold text-brand">{formatNaira(check.liveSubtotalKobo)}</span>
-            </div>
+            {totalDiscountKobo > 0 ? (
+              <>
+                <div className="flex justify-between text-steel">
+                  <span>Items</span>
+                  <span className="font-semibold text-brand">{formatNaira(check.liveSubtotalKobo)}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-green-700">
+                  <span>Promotion</span>
+                  <span>
+                    {"\u2212"}
+                    {formatNaira(totalDiscountKobo)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-steel">
+                  <span>Subtotal</span>
+                  <span className="font-semibold text-brand">{formatNaira(payableKobo)}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between text-steel">
+                <span>Subtotal</span>
+                <span className="font-semibold text-brand">{formatNaira(check.liveSubtotalKobo)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-steel">
               <span>Delivery fee</span>
               <span className="text-xs font-semibold text-brand">Calculated at checkout</span>
@@ -175,7 +242,7 @@ export default function CartPage() {
                 className="flex items-center justify-between rounded-2xl bg-sunshine px-5 py-3.5 text-brand shadow-card"
               >
                 <span className="text-sm font-extrabold">Go to checkout</span>
-                <span className="text-sm font-extrabold">{formatNaira(check.liveSubtotalKobo)}</span>
+                <span className="text-sm font-extrabold">{formatNaira(payableKobo)}</span>
               </Link>
             )}
           </div>

@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import HubOrder, { type IHubOrder } from "@/models/HubOrder";
 import HubProduct from "@/models/HubProduct";
@@ -42,22 +43,57 @@ export async function orderBlocker(order: IHubOrder): Promise<string | null> {
     .lean();
   const byId = new Map(products.map((p) => [String(p._id), p]));
 
+  // Stock is checked against the total for each product across all its lines.
+  const totals = new Map<string, number>();
+  for (const it of order.items) {
+    totals.set(String(it.productId), (totals.get(String(it.productId)) ?? 0) + it.quantity);
+  }
+
   for (const it of order.items) {
     const p = byId.get(String(it.productId));
     if (!p) return `${it.name} is no longer available`;
     if (!p.isAvailable) return `${p.name} is currently unavailable`;
-    if (typeof p.stock === "number" && p.stock < it.quantity) return `Only ${p.stock} left of ${p.name}`;
+    const total = totals.get(String(it.productId)) ?? it.quantity;
+    if (typeof p.stock === "number" && p.stock < total) return `Only ${p.stock} left of ${p.name}`;
   }
   return null;
 }
 
+// Takes the ordered quantities off tracked stock (once per product), marks an item
+// sold out when it reaches zero, and remembers what was taken so a reject can give it back.
+async function deductStock(order: IHubOrder) {
+  const totals = new Map<string, number>();
+  for (const it of order.items) {
+    const key = String(it.productId);
+    totals.set(key, (totals.get(key) ?? 0) + it.quantity);
+  }
+
+  const deducted: { productId: mongoose.Types.ObjectId; quantity: number }[] = [];
+  for (const [productId, qty] of totals) {
+    const res = await HubProduct.updateOne({ _id: productId, stock: { $gte: qty } }, [
+      {
+        $set: {
+          stock: { $subtract: ["$stock", qty] },
+          isAvailable: { $cond: [{ $lte: [{ $subtract: ["$stock", qty] }, 0] }, false, "$isAvailable"] },
+        },
+      },
+    ]);
+    if (res.modifiedCount > 0) deducted.push({ productId: new mongoose.Types.ObjectId(productId), quantity: qty });
+  }
+
+  if (deducted.length > 0) {
+    await HubOrder.updateOne({ _id: order._id }, { $set: { stockDeducted: deducted } });
+  }
+}
+
 export async function onOrderPaid(order: IHubOrder) {
   try {
-    await Promise.all(
-      order.items.map((it) =>
-        HubProduct.updateOne({ _id: it.productId, stock: { $gte: it.quantity } }, { $inc: { stock: -it.quantity } })
-      )
-    );
+    try {
+      await deductStock(order);
+    } catch (e) {
+      // A stock problem must never stop the rider dispatch below.
+      console.error("[hub] stock deduction failed", e);
+    }
 
     const vendor = await HubVendor.findById(order.vendorId).select("name address lat lng").lean();
     if (!vendor) {
