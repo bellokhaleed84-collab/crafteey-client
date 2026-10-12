@@ -1,0 +1,51 @@
+name: Build iOS IPA (unsigned)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install matching Capacitor iOS
+        run: npm install @capacitor/ios@$(node -p "require('@capacitor/core/package.json').version")
+
+      - name: Add iOS platform
+        run: '[ -d ios ] || npx cap add ios'
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      - name: Build archive (no signing)
+        working-directory: ios/App
+        run: |
+          if [ -d App.xcworkspace ]; then
+            TARGET="-workspace App.xcworkspace"
+          else
+            TARGET="-project App.xcodeproj"
+          fi
+          xcodebuild $TARGET -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/App.xcarchive" archive \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+      - name: Package IPA
+        working-directory: ios/App
+        run: |
+          mkdir -p Payload
+          cp -R build/App.xcarchive/Products/Applications/App.app Payload/
+          zip -r App.ipa Payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: App-unsigned-ipa
+          path: ios/App/App.ipa
